@@ -1,0 +1,39 @@
+{
+  "name": "@phnq/service",
+  "version": "1.0.0",
+  "description": "Microservice participant",
+  "main": "index.js",
+  "scripts": {
+    "preinstall": "scripts/preinstall.sh",
+    "dist": "tsc",
+    "postdist": "ts-node scripts/postdist",
+    "clean": "rimraf dist",
+    "test": "jest --coverage",
+    "test:log": "PHNQ_MESSAGE_LOG_NATS=1 npm t",
+    "pretest": "if [ \"$NO_NATS\" != \"1\" ]; then docker run -d --name nats_phnq_service_test -p 4224:4222 nats; fi",
+    "posttest": "if [ \"$NO_NATS\" != \"1\" ]; then docker stop nats_phnq_service_test; docker rm nats_phnq_service_test; fi",
+    "lint": "tsc --noEmit && eslint 'src/**/*.{js,ts,tsx}' --quiet --fix"
+  },
+  "author": "Patrick Gostovic",
+  "license": "ISC",
+  "dependencies": {
+    "@phnq/log": "^1.1.4",
+    "@phnq/message": "^1.13.1",
+    "ts-nats": "^1.2.15",
+    "uuid": "^8.3.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^4.3.0",
+    "@typescript-eslint/parser": "^4.3.0",
+    "eslint": "^7.10.0",
+    "eslint-config-prettier": "^6.12.0",
+    "eslint-plugin-prettier": "^3.1.4",
+    "eslint-plugin-simple-import-sort": "^5.0.3",
+    "jest": "^26.4.2",
+    "prettier": "^2.1.2",
+    "rimraf": "^3.0.2",
+    "ts-jest": "^26.4.1",
+    "ts-node": "^9.0.0",
+    "typescript": "^4.0.3"
+  }
+}
