@@ -86,7 +86,7 @@ describe('Service', () => {
     expect(responses).toStrictEqual(['apple', 'orange', 'pear']);
   });
 
-  it('should throw if connection fails', async () => {
+  it('throws if connection fails', async () => {
     try {
       await createClient<FruitApi>('fruit', {
         signSalt: 'abcd1234',
@@ -98,7 +98,7 @@ describe('Service', () => {
     }
   });
 
-  it('should handle anomalies', async () => {
+  it('handles anomalies', async () => {
     try {
       await fruitClient.doErrors('anomaly');
       fail('should have thrown');
@@ -107,7 +107,7 @@ describe('Service', () => {
     }
   });
 
-  it('should handle errors', async () => {
+  it('handles errors', async () => {
     try {
       await fruitClient.doErrors('error');
       fail('should have thrown');
@@ -116,7 +116,7 @@ describe('Service', () => {
     }
   });
 
-  it('should throw when setting a handler without a domain', () => {
+  it('throws when setting a handler without a domain', () => {
     const anonService = new Service({
       signSalt: 'abcd1234',
       nats: { servers: ['nats://localhost:4224'] },
@@ -127,7 +127,7 @@ describe('Service', () => {
     }).toThrow();
   });
 
-  it('should throw when testing latency without a domain', async () => {
+  it('throws when testing latency without a domain', async () => {
     const anonService = new Service({
       signSalt: 'abcd1234',
       nats: { servers: ['nats://localhost:4224'] },
@@ -143,7 +143,7 @@ describe('Service', () => {
     await anonService.disconnect();
   });
 
-  it('should return client connected state', async () => {
+  it('returns client connected state', async () => {
     const client = createClient<FruitApi>('fruit', {
       signSalt: 'abcd1234',
       nats: { servers: ['nats://localhost:4224'] },
@@ -155,7 +155,7 @@ describe('Service', () => {
     expect(client.isConnected).toBe(false);
   });
 
-  it('should return service connected state', async () => {
+  it('returns service connected state', async () => {
     const service = new Service({
       signSalt: 'abcd1234',
       domain: 'some-service',
@@ -168,7 +168,7 @@ describe('Service', () => {
     expect(service.isConnected).toBe(false);
   });
 
-  it('should throw if no handler is found', async () => {
+  it('throws if no handler is found', async () => {
     const fruitClientBadApi = createClient<{ nope(): Promise<void> }>('fruit', {
       signSalt: 'abcd1234',
       nats: { servers: ['nats://localhost:4224'] },
@@ -184,17 +184,4 @@ describe('Service', () => {
 
     fruitClientBadApi.disconnect();
   });
-
-  // it('should throw on sign verification error', async () => {
-  //   const client = createClient<FruitApi>('fruit', {
-  //     signSalt: 'abcd12345', // wrong salt
-  //     nats: { servers: ['nats://localhost:4224'] },
-  //   });
-  //   try {
-  //     await client.ping();
-  //     fail('should have thrown');
-  //   } catch (err) {
-  //     // do nothing
-  //   }
-  // });
 });
