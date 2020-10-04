@@ -1,12 +1,14 @@
+import { ContextData } from './Context';
+
 interface ServiceMessageBase {
   origin: string; // service that initiated the conversation (req/res chain)
   payload: unknown; // opaque data attached to message
-  context?: unknown;
 }
 
 export interface RequestMessage extends ServiceMessageBase {
   domain: string; // intended recipient service
   method: string; // target message handler on the recipient service
+  contextData: ContextData;
 }
 
 export interface ResponseMessage extends ServiceMessageBase {

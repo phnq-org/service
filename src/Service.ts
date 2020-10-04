@@ -5,6 +5,7 @@ import { NATSTransport } from '@phnq/message/transports/NATSTransport';
 import { NatsConnectionOptions } from 'ts-nats';
 import { v4 as uuid } from 'uuid';
 
+import Context from './Context';
 import { DefaultClient, RequestMessage, ResponseMessage, ServiceHandler, ServiceMessage } from './types';
 
 export interface ServiceConfig {
@@ -144,7 +145,13 @@ class Service {
               return;
             }
 
-            const response = await this.connection!.request({ domain, origin: this.origin, method, payload });
+            const response = await this.connection!.request({
+              domain,
+              origin: this.origin,
+              method,
+              payload,
+              contextData: Context.hasCurrent ? Context.current.data : {},
+            });
 
             if (
               typeof response === 'object' &&
@@ -169,20 +176,44 @@ class Service {
     method,
     origin,
     payload,
+    contextData,
   }: RequestMessage): Promise<ResponseMessage | AsyncIterableIterator<ResponseMessage>> {
     const start = process.hrtime.bigint();
+
     const handler = this.handlers.get(method);
     if (handler) {
-      const response = await handler(payload);
-      if (typeof response === 'object' && (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]) {
-        return (async function* (): AsyncIterableIterator<ResponseMessage> {
-          for await (const payload of response as AsyncIterableIterator<ResponseMessage>) {
-            yield { origin, payload, stats: { time: Number(process.hrtime.bigint() - start) } };
+      return new Promise<ResponseMessage | AsyncIterableIterator<ResponseMessage>>(async (resolve, reject) => {
+        Context.apply(contextData, async () => {
+          try {
+            Context.current.getClient = <T = unknown>(domain: string): T & DefaultClient => this.getClient(domain);
+            const response = await handler(payload);
+            if (
+              typeof response === 'object' &&
+              (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]
+            ) {
+              resolve(
+                (async function* (): AsyncIterableIterator<ResponseMessage> {
+                  for await (const payload of response as AsyncIterableIterator<ResponseMessage>) {
+                    yield {
+                      origin,
+                      payload,
+                      stats: { time: Number(process.hrtime.bigint() - start) },
+                    };
+                  }
+                })(),
+              );
+            } else {
+              resolve({
+                origin,
+                payload: response,
+                stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
+              });
+            }
+          } catch (err) {
+            reject(err);
           }
-        })();
-      } else {
-        return { origin, payload: response, stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 } };
-      }
+        });
+      });
     }
     throw new Anomaly(`No handler for method: ${method}`);
   }
