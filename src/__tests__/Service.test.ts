@@ -1,9 +1,7 @@
 import { matchCategory } from '@phnq/log';
 import { Anomaly } from '@phnq/message';
 
-import Context, { Serializable } from '../Context';
-import createClient from '../createClient';
-import Service from '../Service';
+import { Context, Serializable, Service, ServiceClient } from '..';
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
   matchCategory(/.+/);
@@ -32,7 +30,7 @@ const getVegKinds: VegApi['getKinds'] = async () => {
   return ['carrot', 'celery', 'broccoli'];
 };
 
-vegService.setHandler('getKinds', getVegKinds);
+vegService.addHandler('getKinds', getVegKinds);
 
 const fruitService = new Service({
   signSalt: 'abcd1234',
@@ -70,7 +68,7 @@ const doErrors: FruitApi['doErrors'] = async type => {
   }
 };
 
-const getFromContext: FruitApi['getFromContext'] = async (key: string) => {
+const getFromContext: FruitApi['getFromContext'] = async key => {
   Context.current.set('private', 'only4me');
 
   if (getMyData() !== 'only4me') {
@@ -93,13 +91,13 @@ const getVeggies: FruitApi['getVeggies'] = async () => {
   throw new Error('getClient not defined');
 };
 
-fruitService.setHandler('getKinds', getKinds);
-fruitService.setHandler('getKindsIterator', getKindsIterator);
-fruitService.setHandler('doErrors', doErrors);
-fruitService.setHandler('getFromContext', getFromContext);
-fruitService.setHandler('getVeggies', getVeggies);
+fruitService.addHandler('getKinds', getKinds);
+fruitService.addHandler('getKindsIterator', getKindsIterator);
+fruitService.addHandler('doErrors', doErrors);
+fruitService.addHandler('getFromContext', getFromContext);
+fruitService.addHandler('getVeggies', getVeggies);
 
-const fruitClient = createClient<FruitApi>('fruit', {
+const fruitClient = ServiceClient.create<FruitApi>('fruit', {
   signSalt: 'abcd1234',
   nats: { servers: ['nats://localhost:4224'] },
 });
@@ -138,7 +136,7 @@ describe('Service', () => {
 
   it('throws if connection fails', async () => {
     try {
-      await createClient<FruitApi>('fruit', {
+      await ServiceClient.create<FruitApi>('fruit', {
         signSalt: 'abcd1234',
         nats: { servers: ['nats://localhost:4225'] }, // wrong port
       }).connect();
@@ -173,7 +171,7 @@ describe('Service', () => {
     });
 
     expect(() => {
-      anonService.setHandler('nope', () => Promise.resolve('yo'));
+      anonService.addHandler('nope', () => Promise.resolve('yo'));
     }).toThrow();
   });
 
@@ -194,7 +192,7 @@ describe('Service', () => {
   });
 
   it('returns client connected state', async () => {
-    const client = createClient<FruitApi>('fruit', {
+    const client = ServiceClient.create<FruitApi>('fruit', {
       signSalt: 'abcd1234',
       nats: { servers: ['nats://localhost:4224'] },
     });
@@ -219,7 +217,7 @@ describe('Service', () => {
   });
 
   it('throws if no handler is found', async () => {
-    const fruitClientBadApi = createClient<{ nope(): Promise<void> }>('fruit', {
+    const fruitClientBadApi = ServiceClient.create<{ nope(): Promise<void> }>('fruit', {
       signSalt: 'abcd1234',
       nats: { servers: ['nats://localhost:4224'] },
     });
@@ -233,6 +231,23 @@ describe('Service', () => {
     }
 
     fruitClientBadApi.disconnect();
+  });
+
+  it('throws when calling Context.current if there is no context', () => {
+    expect(() => {
+      Context.current;
+    }).toThrow();
+  });
+
+  it('should return false from Context.hasCurrent if there is no context', () => {
+    expect(Context.hasCurrent).toBe(false);
+  });
+
+  it('should retrieve current context', () => {
+    Context.apply({ foo: 'bar' }, () => {
+      expect(Context.hasCurrent).toBe(true);
+      expect(Context.current.get<string>('foo')).toBe('bar');
+    });
   });
 
   it('applies context', async () => {

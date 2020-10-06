@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
-import { DefaultClient } from './types';
+import { DefaultClient } from './ServiceClient';
 
 const contextLocalStorage = new AsyncLocalStorage<Context>();
 
@@ -40,10 +40,6 @@ class Context {
 
   public get<T extends Serializable>(key: string): T | undefined {
     return this.contextData[key] as T;
-  }
-
-  public merge(contextData: ContextData): void {
-    this.contextData = { ...this.contextData, ...contextData };
   }
 
   public get data(): ContextData {

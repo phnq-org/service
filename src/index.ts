@@ -1,10 +1,8 @@
-import theCreateClient from './createClient';
+import TheContext from './Context';
 import TheService from './Service';
+import TheServiceClient from './ServiceClient';
 
 export const Service = TheService;
-export { ServiceConfig } from './Service';
-
-export const createClient = theCreateClient;
-export { ClientConfig } from './createClient';
-
-export * from './types';
+export const ServiceClient = TheServiceClient;
+export const Context = TheContext;
+export { Serializable } from './Context';
