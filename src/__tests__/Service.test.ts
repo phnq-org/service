@@ -7,101 +7,6 @@ if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
   matchCategory(/.+/);
 }
 
-const wait = (millis = 0): Promise<void> =>
-  new Promise((resolve): void => {
-    setTimeout(resolve, millis);
-  });
-
-const vegService = new Service({
-  signSalt: 'abcd1234',
-  domain: 'veg',
-  nats: { servers: ['nats://localhost:4224'] },
-});
-
-interface VegApi {
-  getKinds(): Promise<string[]>;
-}
-
-const getVegKinds: VegApi['getKinds'] = async () => {
-  if (Context.current.get('bubba') !== 'gump') {
-    throw new Error('Nope');
-  }
-
-  return ['carrot', 'celery', 'broccoli'];
-};
-
-vegService.addHandler('getKinds', getVegKinds);
-
-const fruitService = new Service({
-  signSalt: 'abcd1234',
-  domain: 'fruit',
-  nats: { servers: ['nats://localhost:4224'] },
-});
-
-interface FruitApi {
-  getKinds(): Promise<string[]>;
-  getKindsIterator(): Promise<AsyncIterableIterator<string>>;
-  doErrors(type: 'error' | 'anomaly' | 'none'): Promise<void>;
-  getFromContext(key: string): Promise<Serializable | undefined>;
-  getVeggies(): Promise<string[]>;
-}
-
-const getKinds: FruitApi['getKinds'] = async () => ['apple', 'orange', 'pear'];
-
-const getKindsIterator: FruitApi['getKindsIterator'] = async () =>
-  (async function* () {
-    await wait(200);
-    yield 'apple';
-    await wait(200);
-    yield 'orange';
-    await wait(200);
-    yield 'pear';
-  })();
-
-const doErrors: FruitApi['doErrors'] = async type => {
-  switch (type) {
-    case 'anomaly':
-      throw new Anomaly('the anomaly');
-
-    case 'error':
-      throw new Error('the error');
-  }
-};
-
-const getFromContext: FruitApi['getFromContext'] = async key => {
-  Context.current.set('private', 'only4me');
-
-  if (getMyData() !== 'only4me') {
-    throw new Error('Did not get private data');
-  }
-
-  return Context.current.get(key);
-};
-
-const getMyData = (): string | undefined => {
-  return Context.current.get<string>('private');
-};
-
-const getVeggies: FruitApi['getVeggies'] = async () => {
-  if (Context.current.getClient) {
-    Context.current.set('bubba', 'gump');
-    const vegClient = Context.current.getClient<VegApi>('veg');
-    return await vegClient.getKinds();
-  }
-  throw new Error('getClient not defined');
-};
-
-fruitService.addHandler('getKinds', getKinds);
-fruitService.addHandler('getKindsIterator', getKindsIterator);
-fruitService.addHandler('doErrors', doErrors);
-fruitService.addHandler('getFromContext', getFromContext);
-fruitService.addHandler('getVeggies', getVeggies);
-
-const fruitClient = ServiceClient.create<FruitApi>('fruit', {
-  signSalt: 'abcd1234',
-  nats: { servers: ['nats://localhost:4224'] },
-});
-
 describe('Service', () => {
   beforeAll(async () => {
     await fruitService.connect();
@@ -267,4 +172,101 @@ describe('Service', () => {
   it('uses client from service handler', async () => {
     expect(await fruitClient.getVeggies()).toStrictEqual(['carrot', 'celery', 'broccoli']);
   });
+});
+
+// ========================== TEST INFRASTRUCTURE ==========================
+
+const wait = (millis = 0): Promise<void> =>
+  new Promise((resolve): void => {
+    setTimeout(resolve, millis);
+  });
+
+const vegService = new Service({
+  signSalt: 'abcd1234',
+  domain: 'veg',
+  nats: { servers: ['nats://localhost:4224'] },
+});
+
+interface VegApi {
+  getKinds(): Promise<string[]>;
+}
+
+const getVegKinds: VegApi['getKinds'] = async () => {
+  if (Context.current.get('bubba') !== 'gump') {
+    throw new Error('Nope');
+  }
+
+  return ['carrot', 'celery', 'broccoli'];
+};
+
+vegService.addHandler('getKinds', getVegKinds);
+
+const fruitService = new Service({
+  signSalt: 'abcd1234',
+  domain: 'fruit',
+  nats: { servers: ['nats://localhost:4224'] },
+});
+
+interface FruitApi {
+  getKinds(): Promise<string[]>;
+  getKindsIterator(): Promise<AsyncIterableIterator<string>>;
+  doErrors(type: 'error' | 'anomaly' | 'none'): Promise<void>;
+  getFromContext(key: string): Promise<Serializable | undefined>;
+  getVeggies(): Promise<string[]>;
+}
+
+const getKinds: FruitApi['getKinds'] = async () => ['apple', 'orange', 'pear'];
+
+const getKindsIterator: FruitApi['getKindsIterator'] = async () =>
+  (async function* () {
+    await wait(200);
+    yield 'apple';
+    await wait(200);
+    yield 'orange';
+    await wait(200);
+    yield 'pear';
+  })();
+
+const doErrors: FruitApi['doErrors'] = async type => {
+  switch (type) {
+    case 'anomaly':
+      throw new Anomaly('the anomaly');
+
+    case 'error':
+      throw new Error('the error');
+  }
+};
+
+const getFromContext: FruitApi['getFromContext'] = async key => {
+  Context.current.set('private', 'only4me');
+
+  if (getMyData() !== 'only4me') {
+    throw new Error('Did not get private data');
+  }
+
+  return Context.current.get(key);
+};
+
+const getMyData = (): string | undefined => {
+  return Context.current.get<string>('private');
+};
+
+const getVeggies: FruitApi['getVeggies'] = async () => {
+  if (Context.current.getClient) {
+    Context.current.set('bubba', 'gump');
+    const vegClient = Context.current.getClient<VegApi>('veg');
+    return await vegClient.getKinds();
+  }
+  throw new Error('getClient not defined');
+};
+
+fruitService.addHandler('getKinds', getKinds);
+fruitService.addHandler('getKindsIterator', getKindsIterator);
+fruitService.addHandler('doErrors', doErrors);
+fruitService.addHandler('getFromContext', getFromContext);
+fruitService.addHandler('getVeggies', getVeggies);
+
+const fruitClient = ServiceClient.create<FruitApi>('fruit', {
+  signSalt: 'abcd1234',
+  nats: { servers: ['nats://localhost:4224'] },
 });

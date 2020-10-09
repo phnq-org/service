@@ -2,11 +2,11 @@ interface ApiMessage {
   payload: unknown;
 }
 
-interface ApiRequestMessage extends ApiMessage {
+export interface ApiRequestMessage extends ApiMessage {
   domain: string;
-  type: string;
+  method: string;
 }
 
-interface ApiResponseMessage extends ApiMessage {
+export interface ApiResponseMessage extends ApiMessage {
   stats: unknown;
 }

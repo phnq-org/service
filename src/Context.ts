@@ -4,7 +4,14 @@ import { DefaultClient } from './ServiceClient';
 
 const contextLocalStorage = new AsyncLocalStorage<Context>();
 
-export type Serializable = string | number | boolean | Serializable[] | { [key: string]: Serializable };
+export type Serializable =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | Serializable[]
+  | { [key: string]: Serializable };
 
 export interface ContextData {
   [key: string]: Serializable;

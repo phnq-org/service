@@ -159,12 +159,12 @@ class Service {
 
             if (
               typeof response === 'object' &&
-              (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]
+              (response as AsyncIterableIterator<ServiceResponseMessage>)[Symbol.asyncIterator]
             ) {
               const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
               return (async function* () {
-                for await (const comp of responseIter) {
-                  yield comp.payload;
+                for await (const { payload } of responseIter) {
+                  yield payload;
                 }
               })();
             } else {
