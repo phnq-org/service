@@ -1,8 +1,12 @@
 {
   "name": "@phnq/service",
   "version": "1.0.0",
-  "description": "Microservice participant",
+  "description": "Utilities for building microservices systems.",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pgostovic/service.git"
+  },
   "scripts": {
     "preinstall": "scripts/preinstall.sh",
     "dist": "tsc",
@@ -13,6 +17,9 @@
     "pretest": "if [ \"$NO_NATS\" != \"1\" ]; then docker run -d --name nats_phnq_service_test -p 4224:4222 nats; fi",
     "posttest": "if [ \"$NO_NATS\" != \"1\" ]; then docker stop nats_phnq_service_test; docker rm nats_phnq_service_test; fi",
     "lint": "tsc --noEmit && eslint 'src/**/*.{js,ts,tsx}' --quiet --fix"
+  },
+  "engines": {
+    "node": ">=14"
   },
   "author": "Patrick Gostovic",
   "license": "ISC",
