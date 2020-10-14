@@ -3,7 +3,7 @@ import { MessageConnection } from '@phnq/message';
 import { WebSocketMessageServer } from '@phnq/message/WebSocketMessageServer';
 import http from 'http';
 
-import Context from '../../Context';
+import Context, { ContextData } from '../../Context';
 import Service, { ServiceConfig } from '../../Service';
 import { ApiRequestMessage, ApiResponseMessage } from '../ApiMessage';
 
@@ -78,7 +78,6 @@ class WebSocketApiService {
     conn.setData('langs', getLangs(req));
 
     const authToken = getAuthToken(req, this.config.authTokenCookie);
-    conn.setData('isAuthenticated', false);
     if (authToken) {
       conn.setData('authToken', authToken);
     }
@@ -88,9 +87,7 @@ class WebSocketApiService {
     conn: MessageConnection<ApiRequestMessage, ApiResponseMessage>,
     { domain, method, payload }: ApiRequestMessage,
   ): Promise<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>> {
-    const context = {
-      connectionId: conn.id,
-      isAuthenticated: conn.getData<boolean>('isAuthenticated'),
+    const context: ContextData = {
       authToken: conn.getData<string | undefined>('authToken'),
       langs: conn.getData<string[]>('langs'),
     };
@@ -112,10 +109,12 @@ class WebSocketApiService {
     if (typeof response === 'object' && (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]) {
       return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
         for await (const payload of response as AsyncIterableIterator<unknown>) {
+          conn.setData('authToken', Context.current.authToken);
           yield { payload, stats: 0 };
         }
       })();
     } else {
+      conn.setData('authToken', Context.current.authToken);
       return { payload: response, stats: 0 };
     }
   }

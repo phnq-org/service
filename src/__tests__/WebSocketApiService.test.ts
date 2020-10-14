@@ -81,20 +81,16 @@ const apiService = new WebSocketApiService({
   port: 55777,
   signSalt: 'abcd1234',
   nats: { servers: ['nats://localhost:4224'] },
+  authTokenCookie: 't',
 });
 
-const fruitWsClient = WebSocketApiClient.create<FruitApi>('fruit', 'ws://localhost:55777');
-const fruitWsClientWrongPort = WebSocketApiClient.create<FruitApi>('fruit', 'ws://localhost:55778');
-const fruitWsClientWrongPath = WebSocketApiClient.create<FruitApi>('fruit', 'ws://localhost:55777/wrong-path');
-
-const wait = (millis = 0): Promise<void> =>
-  new Promise((resolve): void => {
-    setTimeout(resolve, millis);
-  });
+const fruitWsClient = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777');
+const fruitWsClientWrongPort = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55778');
+const fruitWsClientWrongPath = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777/wrong-path');
 
 const vegService = new Service({
   signSalt: 'abcd1234',
-  domain: 'veg',
+  domain: 'vegWs',
   nats: { servers: ['nats://localhost:4224'] },
 });
 
@@ -114,7 +110,7 @@ vegService.addHandler('getKinds', getVegKinds);
 
 const fruitService = new Service({
   signSalt: 'abcd1234',
-  domain: 'fruit',
+  domain: 'fruitWs',
   nats: { servers: ['nats://localhost:4224'] },
 });
 
@@ -130,11 +126,8 @@ const getKinds: FruitApi['getKinds'] = async () => ['apple', 'orange', 'pear'];
 
 const getKindsIterator: FruitApi['getKindsIterator'] = async () =>
   (async function* () {
-    await wait(200);
     yield 'apple';
-    await wait(200);
     yield 'orange';
-    await wait(200);
     yield 'pear';
   })();
 
@@ -165,7 +158,7 @@ const getMyData = (): string | undefined => {
 const getVeggies: FruitApi['getVeggies'] = async () => {
   if (Context.current.getClient) {
     Context.current.set('bubba', 'gump');
-    const vegClient = Context.current.getClient<VegApi>('veg');
+    const vegClient = Context.current.getClient<VegApi>('vegWs');
     return await vegClient.getKinds();
   }
   throw new Error('getClient not defined');

@@ -138,12 +138,6 @@ describe('Service', () => {
     fruitClientBadApi.disconnect();
   });
 
-  it('throws when calling Context.current if there is no context', () => {
-    expect(() => {
-      Context.current;
-    }).toThrow();
-  });
-
   it('should return false from Context.hasCurrent if there is no context', () => {
     expect(Context.hasCurrent).toBe(false);
   });
@@ -161,6 +155,7 @@ describe('Service', () => {
         try {
           expect(await fruitClient.getFromContext('language')).toBe('icelandic');
           expect(Context.current.get('private')).toBeUndefined();
+          expect(Context.current.get('shared')).toBe('4anyone');
         } catch (err) {
           fail(err);
         }
@@ -175,11 +170,6 @@ describe('Service', () => {
 });
 
 // ========================== TEST INFRASTRUCTURE ==========================
-
-const wait = (millis = 0): Promise<void> =>
-  new Promise((resolve): void => {
-    setTimeout(resolve, millis);
-  });
 
 const vegService = new Service({
   signSalt: 'abcd1234',
@@ -219,11 +209,8 @@ const getKinds: FruitApi['getKinds'] = async () => ['apple', 'orange', 'pear'];
 
 const getKindsIterator: FruitApi['getKindsIterator'] = async () =>
   (async function* () {
-    await wait(200);
     yield 'apple';
-    await wait(200);
     yield 'orange';
-    await wait(200);
     yield 'pear';
   })();
 
@@ -239,6 +226,7 @@ const doErrors: FruitApi['doErrors'] = async type => {
 
 const getFromContext: FruitApi['getFromContext'] = async key => {
   Context.current.set('private', 'only4me');
+  Context.current.set('shared', '4anyone', true);
 
   if (getMyData() !== 'only4me') {
     throw new Error('Did not get private data');

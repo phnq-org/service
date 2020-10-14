@@ -12,11 +12,14 @@
     "dist": "tsc",
     "postdist": "ts-node scripts/postdist",
     "clean": "rimraf dist",
-    "test": "jest --coverage",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
     "test:log": "PHNQ_MESSAGE_LOG_NATS=1 npm t",
     "pretest": "if [ \"$NO_NATS\" != \"1\" ]; then docker run -d --name nats_phnq_service_test -p 4224:4222 nats; fi",
     "posttest": "if [ \"$NO_NATS\" != \"1\" ]; then docker stop nats_phnq_service_test; docker rm nats_phnq_service_test; fi",
-    "lint": "tsc --noEmit && eslint 'src/**/*.{js,ts,tsx}' --quiet --fix"
+    "lint": "tsc --noEmit && eslint 'src/**/*.{js,ts,tsx}' --quiet --fix",
+    "release:patch": "npm run clean; npm version patch; npm run dist; cd dist; npm publish",
+    "release:minor": "npm run clean; npm version minor; npm run dist; cd dist; npm publish"
   },
   "engines": {
     "node": ">=14"
@@ -26,17 +29,23 @@
   "dependencies": {
     "@phnq/log": "^1.1.4",
     "@phnq/message": "^1.13.5",
+    "@phnq/model": "^1.10.0",
+    "@types/bcrypt": "^3.0.0",
+    "@types/validator": "^13.1.0",
+    "bcrypt": "^5.0.0",
+    "crypto-random-string": "^3.3.0",
     "ts-nats": "^1.2.15",
-    "uuid": "^8.3.1"
+    "uuid": "^8.3.1",
+    "validator": "^13.1.17"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^4.4.0",
-    "@typescript-eslint/parser": "^4.4.0",
-    "eslint": "^7.10.0",
+    "@typescript-eslint/eslint-plugin": "^4.4.1",
+    "@typescript-eslint/parser": "^4.4.1",
+    "eslint": "^7.11.0",
     "eslint-config-prettier": "^6.12.0",
     "eslint-plugin-prettier": "^3.1.4",
     "eslint-plugin-simple-import-sort": "^5.0.3",
-    "jest": "^26.5.2",
+    "jest": "^26.5.3",
     "prettier": "^2.1.2",
     "rimraf": "^3.0.2",
     "ts-jest": "^26.4.1",

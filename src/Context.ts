@@ -15,6 +15,8 @@ export type Serializable =
 
 export interface ContextData {
   [key: string]: Serializable;
+  authToken?: string;
+  langs?: string[];
 }
 
 class Context {
@@ -31,26 +33,51 @@ class Context {
     if (context) {
       return context;
     }
-    throw new Error('Context not available.');
+    return new Context({});
   }
 
   private contextData: ContextData;
+  private sharedContextData: ContextData;
   public getClient?: <T = unknown>(domain: string) => T & DefaultClient;
 
   private constructor(contextData: ContextData) {
     this.contextData = contextData;
+    this.sharedContextData = {};
   }
 
-  public set(key: string, val: Serializable): void {
+  public set(key: string, val: Serializable, share = false): void {
     this.contextData = { ...this.contextData, [key]: val };
+    if (share) {
+      this.sharedContextData = { ...this.sharedContextData, [key]: val };
+    }
   }
 
   public get<T extends Serializable>(key: string): T | undefined {
     return this.contextData[key] as T;
   }
 
+  public merge(data: ContextData): void {
+    this.contextData = { ...this.contextData, ...data };
+  }
+
   public get data(): ContextData {
     return this.contextData;
+  }
+
+  public get sharedData(): ContextData {
+    return this.sharedContextData;
+  }
+
+  public get authToken(): string | undefined {
+    return this.contextData.authToken;
+  }
+
+  public set authToken(authToken: string | undefined) {
+    this.set('authToken', authToken, true);
+  }
+
+  public get langs(): string[] | undefined {
+    return this.contextData.langs;
   }
 }
 

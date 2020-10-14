@@ -16,7 +16,7 @@ export interface ServiceConfig {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceHandler = (requestPayload: any) => Promise<unknown | AsyncIterableIterator<unknown>>;
+type ServiceHandler = (requestPayload: any, service: Service) => Promise<unknown | AsyncIterableIterator<unknown>>;
 
 class Service {
   private log: Logger;
@@ -97,7 +97,7 @@ class Service {
 
   /**
    * Returns the total time to fulfill a simple request from the client's perspective. This
-   * round trip enatils 4 message transfers:
+   * round trip entails 4 message transfers:
    *
    *    client -> NATS (request)
    *    NATS -> service (request)
@@ -163,12 +163,15 @@ class Service {
             ) {
               const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
               return (async function* () {
-                for await (const { payload } of responseIter) {
+                for await (const { payload, sharedContextData } of responseIter) {
+                  Context.current.merge(sharedContextData);
                   yield payload;
                 }
               })();
             } else {
-              return (response as ServiceResponseMessage).payload;
+              const { payload, sharedContextData } = response as ServiceResponseMessage;
+              Context.current.merge(sharedContextData);
+              return payload;
             }
           };
         },
@@ -191,7 +194,7 @@ class Service {
           Context.apply(contextData, async () => {
             try {
               Context.current.getClient = <T = unknown>(domain: string): T & DefaultClient => this.getClient(domain);
-              const response = await handler(payload);
+              const response = await handler(payload, this);
               if (
                 typeof response === 'object' &&
                 (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]
@@ -203,6 +206,7 @@ class Service {
                         origin,
                         payload,
                         stats: { time: Number(process.hrtime.bigint() - start) },
+                        sharedContextData: Context.current.sharedData,
                       };
                     }
                   })(),
@@ -212,6 +216,7 @@ class Service {
                   origin,
                   payload: response,
                   stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
+                  sharedContextData: Context.current.sharedData,
                 });
               }
             } catch (err) {
