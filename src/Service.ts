@@ -154,7 +154,7 @@ class Service {
               origin: this.origin,
               method,
               payload,
-              contextData: Context.hasCurrent ? Context.current.data : {},
+              contextData: Context.current.data,
             });
 
             if (

@@ -138,13 +138,8 @@ describe('Service', () => {
     fruitClientBadApi.disconnect();
   });
 
-  it('should return false from Context.hasCurrent if there is no context', () => {
-    expect(Context.hasCurrent).toBe(false);
-  });
-
   it('should retrieve current context', () => {
     Context.apply({ foo: 'bar' }, () => {
-      expect(Context.hasCurrent).toBe(true);
       expect(Context.current.get<string>('foo')).toBe('bar');
     });
   });

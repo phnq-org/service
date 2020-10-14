@@ -21,11 +21,7 @@ export interface ContextData {
 
 class Context {
   static apply(data: ContextData, fn: () => void): void {
-    contextLocalStorage.run(Context.hasCurrent ? Context.current : new Context(data), fn);
-  }
-
-  static get hasCurrent(): boolean {
-    return contextLocalStorage.getStore() !== undefined;
+    contextLocalStorage.run(Context.current.merge(data), fn);
   }
 
   static get current(): Context {
@@ -56,8 +52,9 @@ class Context {
     return this.contextData[key] as T;
   }
 
-  public merge(data: ContextData): void {
+  public merge(data: ContextData): Context {
     this.contextData = { ...this.contextData, ...data };
+    return this;
   }
 
   public get data(): ContextData {
