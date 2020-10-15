@@ -1,5 +1,5 @@
 import { field, find, Model, ModelId } from '@phnq/model';
-import { v4 as uuid } from 'uuid';
+import cryptoRandomString from 'crypto-random-string';
 
 import Account from './Account';
 
@@ -8,7 +8,7 @@ export const CREDENTIALS_SESSION_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 class Session extends Model {
   @field public readonly accountId: ModelId;
-  @field public readonly token = uuid();
+  @field public readonly token = cryptoRandomString({ length: 20, type: 'url-safe' });
   @field public expiry: Date;
   @field public active = true;
 
