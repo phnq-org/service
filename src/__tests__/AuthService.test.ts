@@ -1,11 +1,9 @@
 import { Anomaly } from '@phnq/message';
 import { MongoDataStore } from '@phnq/model/datastores/MongoDataStore';
 
-import AuthApi from '../auth/AuthApi';
-import AuthService from '../auth/AuthService';
+import { AuthApi, AuthService, ServiceClient } from '..';
 import Account from '../auth/model/Account';
 import Session from '../auth/model/Session';
-import ServiceClient from '../ServiceClient';
 
 describe('AuthService', () => {
   beforeAll(async () => {
