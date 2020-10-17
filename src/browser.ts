@@ -3,3 +3,4 @@ import TheAuthApi from './auth/AuthApi';
 
 export const WebSocketApiClient = WsClient;
 export type AuthApi = TheAuthApi;
+export * from './auth/AuthApi';
