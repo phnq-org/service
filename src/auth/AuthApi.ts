@@ -18,7 +18,7 @@ type SessionParams = SessionWithCredentialsParams | SessionWithCodeParams;
 
 interface SessionWithCredentialsParams {
   email: string;
-  password: string;
+  password?: string;
   code?: undefined;
 }
 

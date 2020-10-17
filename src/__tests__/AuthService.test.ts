@@ -63,15 +63,20 @@ describe('AuthService', () => {
     test('create a session for a no-password account and authenticate it', async () => {
       expect((await authClient.createAccount({ email: 'bubba@gump.com' })).accountStatus.state).toBe('created');
 
-      const { accountStatus, token } = await authClient.createSession({ code: 'bubba@gump.com' });
+      const { accountStatus, token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       expect(accountStatus.state).toBe('active');
       expect(token).not.toBeUndefined();
 
+      await authClient.destroySession({ token });
+
+      const token2 = (await authClient.createSession({ code: 'CODE:bubba@gump.com' })).token;
+
       let authenticated: boolean;
       try {
-        await authClient.authenticate({ token });
+        await authClient.authenticate({ token: token2 });
         authenticated = true;
       } catch (err) {
+        console.log('ERR', token2, err);
         authenticated = false;
       }
       expect(authenticated).toBe(true);
@@ -98,7 +103,7 @@ describe('AuthService', () => {
         (await authClient.createAccount({ email: 'bubba@gump.com', password: 'abcd1234' })).accountStatus.state,
       ).toBe('created');
 
-      const { accountStatus } = await authClient.createSession({ code: 'bubba@gump.com' });
+      const { accountStatus } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       expect(accountStatus.state).toBe('active');
 
       const { token } = await authClient.createSession({
@@ -122,7 +127,7 @@ describe('AuthService', () => {
     test('destroy session, token should be rejected', async () => {
       expect((await authClient.createAccount({ email: 'bubba@gump.com' })).accountStatus.state).toBe('created');
 
-      const { token } = await authClient.createSession({ code: 'bubba@gump.com' });
+      const { token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       await authClient.authenticate({ token });
       await authClient.destroySession({ token });
 
@@ -141,7 +146,7 @@ describe('AuthService', () => {
     test('set password, create a session with email/password', async () => {
       expect((await authClient.createAccount({ email: 'bubba@gump.com' })).accountStatus.state).toBe('created');
 
-      const { token } = await authClient.createSession({ code: 'bubba@gump.com' });
+      const { token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       await authClient.setPassword({ token, password: 'cheese' });
       await authClient.destroySession({ token });
 

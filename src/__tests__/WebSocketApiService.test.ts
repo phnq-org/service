@@ -1,8 +1,7 @@
 import { Anomaly } from '@phnq/message';
 
-import { Context, Serializable, Service } from '..';
-import WebSocketApiClient from '../api/ws/WebSocketApiClient';
-import WebSocketApiService from '../api/ws/WebSocketApiService';
+import { Context, Serializable, Service, WebSocketApiService } from '..';
+import { WebSocketApiClient } from '../browser';
 
 describe('WebSocketApiService', () => {
   beforeAll(async () => {
