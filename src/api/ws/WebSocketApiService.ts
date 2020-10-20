@@ -89,6 +89,7 @@ class WebSocketApiService {
   ): Promise<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>> {
     const context: ContextData = {
       authToken: conn.getData<string | undefined>('authToken'),
+      identity: conn.getData<string | undefined>('identity'),
       langs: conn.getData<string[]>('langs'),
     };
 
@@ -96,27 +97,22 @@ class WebSocketApiService {
       [key: string]: (payload: unknown) => Promise<unknown | AsyncIterableIterator<unknown>>;
     }>(domain);
 
-    const response = await new Promise<unknown | AsyncIterableIterator<unknown>>((resolve, reject) => {
-      Context.apply(context, async () => {
-        try {
-          resolve(await serviceClient[method](payload));
-        } catch (err) {
-          reject(err);
-        }
-      });
+    return Context.apply<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>>(context, async () => {
+      const response = await serviceClient[method](payload);
+      if (typeof response === 'object' && (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]) {
+        return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
+          for await (const payload of response as AsyncIterableIterator<unknown>) {
+            conn.setData('identity', Context.current.identity);
+            conn.setData('authToken', Context.current.authToken);
+            yield { payload, stats: 0 };
+          }
+        })();
+      } else {
+        conn.setData('identity', Context.current.identity);
+        conn.setData('authToken', Context.current.authToken);
+        return { payload: response, stats: 0 };
+      }
     });
-
-    if (typeof response === 'object' && (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]) {
-      return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
-        for await (const payload of response as AsyncIterableIterator<unknown>) {
-          conn.setData('authToken', Context.current.authToken);
-          yield { payload, stats: 0 };
-        }
-      })();
-    } else {
-      conn.setData('authToken', Context.current.authToken);
-      return { payload: response, stats: 0 };
-    }
   }
 }
 

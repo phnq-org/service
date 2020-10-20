@@ -1,19 +1,24 @@
 import { Anomaly } from '@phnq/message';
 import { MongoDataStore } from '@phnq/model/datastores/MongoDataStore';
 
-import { AuthApi, AuthService, ServiceClient } from '..';
+import { AuthApi, AuthService, ServiceClient, WebSocketApiService } from '..';
 import Account from '../auth/model/Account';
 import Session from '../auth/model/Session';
+import { WebSocketApiClient } from '../browser';
 
 describe('AuthService', () => {
   beforeAll(async () => {
     await authService.connect();
     await authClient.connect();
+    await apiService.start();
+    await authWsClient.connect();
   });
 
   afterAll(async () => {
     await authService.disconnect();
     await authClient.disconnect();
+    await apiService.stop();
+    await authWsClient.disconnect();
   });
 
   beforeEach(async () => {
@@ -25,26 +30,16 @@ describe('AuthService', () => {
     expect(await authClient.ping()).toBe('pong');
   });
 
-  describe('account creation', () => {
-    test('create an account with an email address, prevent duplicate email', async () => {
-      const { accountStatus } = await authClient.createAccount({ email: 'bubba@gump.com' });
-      expect(accountStatus.state).toBe('created');
-
-      let createdAccountWithSameEmail = false;
-      try {
-        await authClient.createAccount({ email: 'bubba@gump.com' });
-        createdAccountWithSameEmail = true;
-      } catch (err) {
-        expect(err).toBeInstanceOf(Anomaly);
-        createdAccountWithSameEmail = false;
-      }
-      expect(createdAccountWithSameEmail).toBe(false);
+  describe('identification', () => {
+    test('identify by email address', async () => {
+      const { identified } = await authClient.identify({ email: 'bubba@gump.com' });
+      expect(identified).toBe(true);
     });
 
     test('should reject invalid email address', async () => {
       let allowedInvalidEmail: boolean;
       try {
-        await authClient.createAccount({ email: 'bambam' });
+        await authClient.identify({ email: 'bambam' });
         allowedInvalidEmail = true;
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
@@ -52,20 +47,28 @@ describe('AuthService', () => {
       }
       expect(allowedInvalidEmail).toBe(false);
     });
-
-    test('create an account with an email address and password', async () => {
-      const { accountStatus } = await authClient.createAccount({ email: 'bubba@gump.com', password: 'abcd1234' });
-      expect(accountStatus.state).toBe('created');
-    });
   });
 
   describe('session creation', () => {
     test('create a session for a no-password account and authenticate it', async () => {
-      expect((await authClient.createAccount({ email: 'bubba@gump.com' })).accountStatus.state).toBe('created');
+      await authClient.identify({ email: 'bubba@gump.com' });
 
       const { accountStatus, token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       expect(accountStatus.state).toBe('active');
       expect(token).not.toBeUndefined();
+
+      try {
+        await authClient.authenticate({ token });
+      } catch (err) {
+        fail(err);
+      }
+
+      try {
+        await authClient.authenticate();
+        fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(Anomaly);
+      }
 
       await authClient.destroySession({ token });
 
@@ -76,47 +79,6 @@ describe('AuthService', () => {
         await authClient.authenticate({ token: token2 });
         authenticated = true;
       } catch (err) {
-        console.log('ERR', token2, err);
-        authenticated = false;
-      }
-      expect(authenticated).toBe(true);
-    });
-
-    test("should not allow session to be created with email/password for an account in 'created' state.", async () => {
-      expect(
-        (await authClient.createAccount({ email: 'bubba@gump.com', password: 'abcd1234' })).accountStatus.state,
-      ).toBe('created');
-
-      let sessionCreated: boolean;
-      try {
-        await authClient.createSession({ email: 'bubba@gump.com', password: 'abcd1234' });
-        sessionCreated = true;
-      } catch (err) {
-        expect(err).toBeInstanceOf(Anomaly);
-        sessionCreated = false;
-      }
-      expect(sessionCreated).toBe(false);
-    });
-
-    test('create a session with email/password and authenticate it', async () => {
-      expect(
-        (await authClient.createAccount({ email: 'bubba@gump.com', password: 'abcd1234' })).accountStatus.state,
-      ).toBe('created');
-
-      const { accountStatus } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
-      expect(accountStatus.state).toBe('active');
-
-      const { token } = await authClient.createSession({
-        email: 'bubba@gump.com',
-        password: 'abcd1234',
-      });
-      expect(token).not.toBeUndefined();
-
-      let authenticated: boolean;
-      try {
-        await authClient.authenticate({ token });
-        authenticated = true;
-      } catch (err) {
         authenticated = false;
       }
       expect(authenticated).toBe(true);
@@ -125,7 +87,7 @@ describe('AuthService', () => {
 
   describe('session destruction', () => {
     test('destroy session, token should be rejected', async () => {
-      expect((await authClient.createAccount({ email: 'bubba@gump.com' })).accountStatus.state).toBe('created');
+      await authClient.identify({ email: 'bubba@gump.com' });
 
       const { token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       await authClient.authenticate({ token });
@@ -144,7 +106,7 @@ describe('AuthService', () => {
 
   describe('set password', () => {
     test('set password, create a session with email/password', async () => {
-      expect((await authClient.createAccount({ email: 'bubba@gump.com' })).accountStatus.state).toBe('created');
+      await authClient.identify({ email: 'bubba@gump.com' });
 
       const { token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       await authClient.setPassword({ token, password: 'cheese' });
@@ -177,6 +139,29 @@ describe('AuthService', () => {
       expect(sessionCreated).toBe(false);
     });
   });
+
+  describe('WebSocket Auth', () => {
+    test('Identify, create session, authenticate, destroy session', async () => {
+      await authWsClient.identify({ email: 'bubba@gump.com' });
+
+      await authWsClient.createSession({ code: 'CODE:bubba@gump.com' });
+
+      try {
+        await authWsClient.authenticate();
+      } catch (err) {
+        fail(err);
+      }
+
+      await authWsClient.destroySession();
+
+      try {
+        await authWsClient.authenticate();
+        fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(Anomaly);
+      }
+    });
+  });
 });
 
 // ========================== TEST INFRASTRUCTURE ==========================
@@ -193,3 +178,12 @@ const authClient = ServiceClient.create<AuthApi>('auth', {
   signSalt: 'abcd1234',
   nats: { servers: ['nats://localhost:4224'] },
 });
+
+const apiService = new WebSocketApiService({
+  port: 55777,
+  signSalt: 'abcd1234',
+  nats: { servers: ['nats://localhost:4224'] },
+  authTokenCookie: 't',
+});
+
+const authWsClient = WebSocketApiClient.create<AuthApi>('auth', 'ws://localhost:55777');

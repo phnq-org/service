@@ -7,12 +7,15 @@ import AuthApi from '../AuthApi';
 import AuthService from '../AuthService';
 import Session from '../model/Session';
 
-const setPassword: AuthApi['setPassword'] = async ({ password, token }, service?: AuthService) => {
+const setPassword: AuthApi['setPassword'] = async (
+  { password, token = Context.current.authToken },
+  service?: AuthService,
+) => {
   if (!(await service!.validatePassword(password))) {
     throw new Anomaly('Invalid password');
   }
 
-  const session = await search(Session, { token: token || Context.current.authToken }).first();
+  const session = await search(Session, { token }).first();
   if (session) {
     const account = await session.account;
     account.password = await bcrypt.hash(password, 5);

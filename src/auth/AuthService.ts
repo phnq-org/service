@@ -2,9 +2,9 @@ import { DataStore, useDataStore } from '@phnq/model';
 
 import Service, { ServiceConfig } from '../Service';
 import authenticate from './handlers/authenticate';
-import createAccount from './handlers/createAccount';
 import createSession from './handlers/createSession';
 import destroySession from './handlers/destroySession';
+import identify from './handlers/identify';
 import setPassword from './handlers/setPassword';
 import Account from './model/Account';
 import Session from './model/Session';
@@ -27,9 +27,9 @@ class AuthService extends Service {
     if (config.validatePassword) {
       this.validatePassword = config.validatePassword;
     }
-    this.addHandler('authenticate', authenticate);
-    this.addHandler('createAccount', createAccount);
+    this.addHandler('identify', identify);
     this.addHandler('createSession', createSession);
+    this.addHandler('authenticate', authenticate);
     this.addHandler('destroySession', destroySession);
     this.addHandler('setPassword', setPassword);
   }

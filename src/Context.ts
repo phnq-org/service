@@ -15,13 +15,23 @@ export type Serializable =
 
 export interface ContextData {
   [key: string]: Serializable;
+  identity?: string;
   authToken?: string;
   langs?: string[];
 }
 
 class Context {
-  static apply(data: ContextData, fn: () => void): void {
-    contextLocalStorage.run(Context.current.merge(data), fn);
+  static apply<T = unknown>(data: ContextData, fn: () => void | Promise<T>): Promise<T> {
+    return new Promise<T>(resolve => {
+      contextLocalStorage.run(Context.current.merge(data), () => {
+        const ret = fn();
+        if (ret) {
+          resolve(ret);
+        } else {
+          resolve();
+        }
+      });
+    });
   }
 
   static get current(): Context {
@@ -71,6 +81,14 @@ class Context {
 
   public set authToken(authToken: string | undefined) {
     this.set('authToken', authToken, true);
+  }
+
+  public get identity(): string | undefined {
+    return this.contextData.identity;
+  }
+
+  public set identity(identity: string | undefined) {
+    this.set('identity', identity, true);
   }
 
   public get langs(): string[] | undefined {

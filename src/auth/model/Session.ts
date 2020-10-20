@@ -11,10 +11,17 @@ class Session extends Model {
   @field public readonly token = cryptoRandomString({ length: 20, type: 'url-safe' });
   @field public expiry: Date;
   @field public active = true;
+  private _account?: Account;
 
-  public constructor(accountId: ModelId) {
+  public constructor(accountOrId: ModelId | Account) {
     super();
-    this.accountId = accountId;
+    if (accountOrId instanceof Account) {
+      this.accountId = accountOrId.id;
+      this._account = accountOrId;
+    } else {
+      this.accountId = accountOrId;
+      this._account = undefined;
+    }
     this.expiry = new Date(Date.now() + CREDENTIALS_SESSION_EXPIRY);
   }
 
@@ -23,7 +30,7 @@ class Session extends Model {
   }
 
   public get account(): Promise<Account> {
-    return find(Account, this.accountId) as Promise<Account>;
+    return this._account ? Promise.resolve(this._account) : (find(Account, this.accountId) as Promise<Account>);
   }
 }
 
