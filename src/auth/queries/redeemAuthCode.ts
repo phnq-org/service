@@ -3,8 +3,8 @@ import { search } from '@phnq/model';
 
 import Account from '../model/Account';
 
-const redeemAuthCode = async (code: string, emailAsCode = false): Promise<Account> => {
-  const query = emailAsCode ? { email: code.substring('CODE:'.length) } : { 'authCode.code': code };
+const redeemAuthCode = async (code: string, addressAsCode = false): Promise<Account> => {
+  const query = addressAsCode ? { address: code.substring('CODE:'.length) } : { 'authCode.code': code };
 
   const account = await search(Account, query).first();
   if (account && account.authCode && account.authCode.expiry.getTime() < Date.now()) {

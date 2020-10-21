@@ -10,7 +10,7 @@ const authenticate: AuthApi['authenticate'] = async ({ token = Context.current.a
     const session = await search(Session, { token }).first();
     if (session && session.isValid) {
       const account = await session.account;
-      Context.current.identity = account.email;
+      Context.current.identity = account.address;
       Context.current.authToken = token;
       return { accountStatus: account.status };
     }

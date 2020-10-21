@@ -6,14 +6,15 @@ import { AccountStatus } from '../AuthApi';
 const AUTH_CODE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
 class Account extends Model {
-  @field public readonly email: string;
+  @field public readonly address: string;
+  // @field public twoFactorAddress?: string; // At some point
   @field public password?: string;
   @field public authCode: { code: string; expiry: Date } | null;
   @field public status: AccountStatus = { state: 'created' };
 
-  public constructor(email: string) {
+  public constructor(address: string) {
     super();
-    this.email = email;
+    this.address = address;
     this.authCode = null;
   }
 

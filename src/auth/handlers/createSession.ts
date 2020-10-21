@@ -11,24 +11,24 @@ import redeemAuthCode from '../queries/redeemAuthCode';
 import destroySession from './destroySession';
 
 const createSession: AuthApi['createSession'] = async (
-  { code, email = Context.current.identity, password },
+  { code, address = Context.current.identity, password },
   service?: AuthService,
 ) => {
   if (Context.current.authToken) {
     await destroySession({ token: Context.current.authToken });
   }
 
-  const useEmailAsCode = service!.useEmailAsCode() || false;
+  const useAddressAsCode = service!.useAddressAsCode() || false;
   let session: Session | undefined;
   if (code) {
-    session = await createSessionWithCode(code, useEmailAsCode!);
-  } else if (email && password) {
-    session = await createSessionWithCredentials(email, password);
+    session = await createSessionWithCode(code, useAddressAsCode!);
+  } else if (address && password) {
+    session = await createSessionWithCredentials(address, password);
   }
 
   if (session) {
     const account = await session.account;
-    Context.current.identity = account.email;
+    Context.current.identity = account.address;
     Context.current.authToken = session.token;
     return { token: session.token, accountStatus: account.status };
   }
@@ -36,8 +36,8 @@ const createSession: AuthApi['createSession'] = async (
   throw new Anomaly('Not Authenticated');
 };
 
-const createSessionWithCode = async (code: string, useEmailAsCode: boolean): Promise<Session | undefined> => {
-  let account = await redeemAuthCode(code, useEmailAsCode);
+const createSessionWithCode = async (code: string, useAddressAsCode: boolean): Promise<Session | undefined> => {
+  let account = await redeemAuthCode(code, useAddressAsCode);
   if (account) {
     if (account.status.state === 'created') {
       account.status.state = 'active';
@@ -52,8 +52,8 @@ const createSessionWithCode = async (code: string, useEmailAsCode: boolean): Pro
   return undefined;
 };
 
-const createSessionWithCredentials = async (email: string, password: string): Promise<Session | undefined> => {
-  const account = await search(Account, { email }).first();
+const createSessionWithCredentials = async (address: string, password: string): Promise<Session | undefined> => {
+  const account = await search(Account, { address }).first();
   if (
     account &&
     account.password &&

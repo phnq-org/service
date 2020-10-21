@@ -32,14 +32,14 @@ describe('AuthService', () => {
 
   describe('identification', () => {
     test('identify by email address', async () => {
-      const { identified } = await authClient.identify({ email: 'bubba@gump.com' });
+      const { identified } = await authClient.identify({ address: 'bubba@gump.com' });
       expect(identified).toBe(true);
     });
 
     test('should reject invalid email address', async () => {
       let allowedInvalidEmail: boolean;
       try {
-        await authClient.identify({ email: 'bambam' });
+        await authClient.identify({ address: 'bambam' });
         allowedInvalidEmail = true;
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
@@ -47,11 +47,15 @@ describe('AuthService', () => {
       }
       expect(allowedInvalidEmail).toBe(false);
     });
+
+    test('identify by phone number', async () => {
+      await authClient.identify({ address: '4165551234' });
+    });
   });
 
   describe('session creation', () => {
     test('create a session for a no-password account and authenticate it', async () => {
-      await authClient.identify({ email: 'bubba@gump.com' });
+      await authClient.identify({ address: 'bubba@gump.com' });
 
       const { accountStatus, token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       expect(accountStatus.state).toBe('active');
@@ -87,7 +91,7 @@ describe('AuthService', () => {
 
   describe('session destruction', () => {
     test('destroy session, token should be rejected', async () => {
-      await authClient.identify({ email: 'bubba@gump.com' });
+      await authClient.identify({ address: 'bubba@gump.com' });
 
       const { token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       await authClient.authenticate({ token });
@@ -106,13 +110,13 @@ describe('AuthService', () => {
 
   describe('set password', () => {
     test('set password, create a session with email/password', async () => {
-      await authClient.identify({ email: 'bubba@gump.com' });
+      await authClient.identify({ address: 'bubba@gump.com' });
 
       const { token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
       await authClient.setPassword({ token, password: 'cheese' });
       await authClient.destroySession({ token });
 
-      const { token: token2 } = await authClient.createSession({ email: 'bubba@gump.com', password: 'cheese' });
+      const { token: token2 } = await authClient.createSession({ address: 'bubba@gump.com', password: 'cheese' });
       expect(token2).not.toBeUndefined();
 
       let authenticated: boolean;
@@ -130,7 +134,7 @@ describe('AuthService', () => {
       // Old password should no longer work.
       let sessionCreated: boolean;
       try {
-        await authClient.createSession({ email: 'bubba@gump.com', password: 'cheese' });
+        await authClient.createSession({ address: 'bubba@gump.com', password: 'cheese' });
         sessionCreated = true;
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
@@ -142,7 +146,7 @@ describe('AuthService', () => {
 
   describe('WebSocket Auth', () => {
     test('Identify, create session, authenticate, destroy session', async () => {
-      await authWsClient.identify({ email: 'bubba@gump.com' });
+      await authWsClient.identify({ address: 'bubba@gump.com' });
 
       await authWsClient.createSession({ code: 'CODE:bubba@gump.com' });
 
@@ -171,7 +175,7 @@ const authService = new AuthService({
   domain: 'auth',
   nats: { servers: ['nats://localhost:4224'] },
   datastore: new MongoDataStore('mongodb://localhost:27017/authtest'),
-  emailAsCode: true,
+  addressAsCode: true,
 });
 
 const authClient = ServiceClient.create<AuthApi>('auth', {

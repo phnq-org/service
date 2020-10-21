@@ -11,19 +11,19 @@ import Session from './model/Session';
 
 interface AuthServiceConfig extends ServiceConfig {
   datastore: DataStore;
-  emailAsCode?: boolean;
+  addressAsCode?: boolean;
   validatePassword?(password: string): Promise<boolean>;
 }
 
 class AuthService extends Service {
   private datastore: DataStore;
-  private emailAsCode?: boolean;
+  private addressAsCode?: boolean;
   public validatePassword = (password: string): Promise<boolean> => Promise.resolve(password.length >= 6);
 
   public constructor(config: AuthServiceConfig) {
     super(config);
     this.datastore = config.datastore;
-    this.emailAsCode = config.emailAsCode;
+    this.addressAsCode = config.addressAsCode;
     if (config.validatePassword) {
       this.validatePassword = config.validatePassword;
     }
@@ -37,7 +37,7 @@ class AuthService extends Service {
   public async connect(): Promise<void> {
     await super.connect();
 
-    await this.datastore.createIndex('Account', { email: 1 }, { unique: true });
+    await this.datastore.createIndex('Account', { address: 1 }, { unique: true });
     await this.datastore.createIndex('Account', { 'authCode.code': 1 }, {});
 
     await this.datastore.createIndex('Session', { token: 1 }, {});
@@ -52,8 +52,8 @@ class AuthService extends Service {
     await this.datastore.close();
   }
 
-  public useEmailAsCode(): boolean | undefined {
-    return this.emailAsCode;
+  public useAddressAsCode(): boolean | undefined {
+    return this.addressAsCode;
   }
 }
 
