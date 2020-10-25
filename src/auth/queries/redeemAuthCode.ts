@@ -4,7 +4,8 @@ import { search } from '@phnq/model';
 import Account from '../model/Account';
 
 const redeemAuthCode = async (code: string, addressAsCode = false): Promise<Account> => {
-  const query = addressAsCode ? { address: code.substring('CODE:'.length) } : { 'authCode.code': code };
+  const query =
+    addressAsCode && code.match(/^CODE:/) ? { address: code.substring('CODE:'.length) } : { 'authCode.code': code };
 
   const account = await search(Account, query).first();
   if (account && account.authCode && account.authCode.expiry.getTime() < Date.now()) {
