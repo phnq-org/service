@@ -1,6 +1,6 @@
 {
   "name": "@phnq/service",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Utilities for building microservices systems.",
   "main": "index.js",
   "repository": {
