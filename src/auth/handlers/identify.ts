@@ -7,12 +7,13 @@ import isMobilePhone from 'validator/lib/isMobilePhone';
 
 import Context from '../../Context';
 import AuthApi from '../AuthApi';
+import AuthService from '../AuthService';
 import Account from '../model/Account';
 import destroySession from './destroySession';
 
 const log = createLogger('identify');
 
-const identify: AuthApi['identify'] = async ({ address }) => {
+const identify: AuthApi['identify'] = async ({ address }, service?: AuthService) => {
   if (!(isEmail(address) || isMobilePhone(address, ['en-CA', 'en-US']))) {
     throw new Anomaly('Invalid address');
   }
@@ -26,12 +27,16 @@ const identify: AuthApi['identify'] = async ({ address }) => {
   await account.save();
   Context.current.identity = address;
 
-  if (isEmail(address)) {
-    log(`EMAIL AUTH CODE (${address}): ${account.authCode}`);
-  }
+  if (account.authCode?.code) {
+    const authCodeUrl = service?.authCodeUrl(account.authCode.code);
 
-  if (isMobilePhone(address)) {
-    log(`TEXTs AUTH CODE (${address}): ${account.authCode}`);
+    if (isEmail(address)) {
+      log(`EMAIL AUTH CODE (${address}):`, authCodeUrl);
+    }
+
+    if (isMobilePhone(address)) {
+      log(`TEXT AUTH CODE (${address}):`, authCodeUrl);
+    }
   }
 
   return { identified: true };

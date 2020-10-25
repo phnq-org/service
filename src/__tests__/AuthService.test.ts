@@ -175,6 +175,9 @@ const authService = new AuthService({
   domain: 'auth',
   nats: { servers: ['nats://localhost:4224'] },
   datastore: new MongoDataStore('mongodb://localhost:27017/authtest'),
+  authCodeUrl(code) {
+    return `http://test.com/code/${code}`;
+  },
   addressAsCode: true,
 });
 
