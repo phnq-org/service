@@ -1,7 +1,6 @@
-import { Anomaly } from '@phnq/message';
 import { field, Model } from '@phnq/model';
 
-import { AccountStatus } from '../AuthApi';
+import { AccountStatus, AuthError, AuthErrorInfo } from '../AuthApi';
 
 const AUTH_CODE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
@@ -20,7 +19,7 @@ class Account extends Model {
 
   public setAuthCode(code: string): void {
     if (this.status.state === 'inactive') {
-      throw new Anomaly('Account is not active');
+      throw new AuthError(AuthErrorInfo.InactiveAccount);
     }
     this.authCode = { code, expiry: new Date(Date.now() + AUTH_CODE_EXPIRY) };
   }

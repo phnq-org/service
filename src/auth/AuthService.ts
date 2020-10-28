@@ -13,22 +13,22 @@ interface AuthServiceConfig extends ServiceConfig {
   datastore: DataStore;
   authCodeUrl(code: string): string;
   addressAsCode?: boolean;
-  validatePassword?(password: string): Promise<boolean>;
+  validatePasswordRules?(password: string): Promise<boolean>;
 }
 
 class AuthService extends Service {
   private datastore: DataStore;
   private addressAsCode?: boolean;
   public readonly authCodeUrl: (code: string) => string;
-  public readonly validatePassword = (password: string): Promise<boolean> => Promise.resolve(password.length >= 6);
+  public readonly validatePasswordRules = (password: string): Promise<boolean> => Promise.resolve(password.length >= 6);
 
   public constructor(config: AuthServiceConfig) {
     super(config);
     this.datastore = config.datastore;
     this.authCodeUrl = config.authCodeUrl;
     this.addressAsCode = config.addressAsCode;
-    if (config.validatePassword) {
-      this.validatePassword = config.validatePassword;
+    if (config.validatePasswordRules) {
+      this.validatePasswordRules = config.validatePasswordRules;
     }
     this.addHandler('identify', identify);
     this.addHandler('createSession', createSession);

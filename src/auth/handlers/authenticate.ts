@@ -1,8 +1,7 @@
-import { Anomaly } from '@phnq/message';
 import { search } from '@phnq/model';
 
 import Context from '../../Context';
-import AuthApi from '../AuthApi';
+import AuthApi, { AuthError, AuthErrorInfo } from '../AuthApi';
 import Session from '../model/Session';
 
 const authenticate: AuthApi['authenticate'] = async ({ token = Context.current.authToken } = {}) => {
@@ -17,7 +16,7 @@ const authenticate: AuthApi['authenticate'] = async ({ token = Context.current.a
     Context.current.identity = undefined;
     Context.current.authToken = undefined;
   }
-  throw new Anomaly('Not Authenticated');
+  throw new AuthError(AuthErrorInfo.NotAuthenticated);
 };
 
 export default authenticate;

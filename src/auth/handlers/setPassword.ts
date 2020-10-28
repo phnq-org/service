@@ -1,9 +1,8 @@
-import { Anomaly } from '@phnq/message';
 import { search } from '@phnq/model';
 import bcrypt from 'bcrypt';
 
 import Context from '../../Context';
-import AuthApi from '../AuthApi';
+import AuthApi, { AuthError, AuthErrorInfo } from '../AuthApi';
 import AuthService from '../AuthService';
 import Session from '../model/Session';
 
@@ -11,8 +10,8 @@ const setPassword: AuthApi['setPassword'] = async (
   { password, token = Context.current.authToken },
   service?: AuthService,
 ) => {
-  if (!(await service!.validatePassword(password))) {
-    throw new Anomaly('Invalid password');
+  if (!(await service!.validatePasswordRules(password))) {
+    throw new AuthError(AuthErrorInfo.PasswordRulesViolation);
   }
 
   const session = await search(Session, { token }).first();
@@ -22,7 +21,7 @@ const setPassword: AuthApi['setPassword'] = async (
     await account.save();
     return { passwordSet: true };
   }
-  throw new Anomaly('Not Authenticated');
+  throw new AuthError(AuthErrorInfo.NotAuthenticated);
 };
 
 export default setPassword;

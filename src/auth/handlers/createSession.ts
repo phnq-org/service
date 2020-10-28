@@ -1,9 +1,8 @@
-import { Anomaly } from '@phnq/message';
 import { search } from '@phnq/model';
 import bcrypt from 'bcrypt';
 
 import Context from '../../Context';
-import AuthApi from '../AuthApi';
+import AuthApi, { AuthError, AuthErrorInfo } from '../AuthApi';
 import AuthService from '../AuthService';
 import Account from '../model/Account';
 import Session from '../model/Session';
@@ -33,7 +32,7 @@ const createSession: AuthApi['createSession'] = async (
     return { token: session.token, accountStatus: account.status };
   }
 
-  throw new Anomaly('Not Authenticated');
+  throw new AuthError(AuthErrorInfo.NotAuthenticated);
 };
 
 const createSessionWithCode = async (code: string, useAddressAsCode: boolean): Promise<Session | undefined> => {

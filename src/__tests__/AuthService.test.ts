@@ -2,6 +2,7 @@ import { Anomaly } from '@phnq/message';
 import { MongoDataStore } from '@phnq/model/datastores/MongoDataStore';
 
 import { AuthApi, AuthService, ServiceClient, WebSocketApiService } from '..';
+import { AuthErrorInfo } from '../auth/AuthApi';
 import Account from '../auth/model/Account';
 import Session from '../auth/model/Session';
 import { WebSocketApiClient } from '../browser';
@@ -43,6 +44,7 @@ describe('AuthService', () => {
         allowedInvalidEmail = true;
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
+        expect(err.info).toBe(AuthErrorInfo.InvalidAddress);
         allowedInvalidEmail = false;
       }
       expect(allowedInvalidEmail).toBe(false);
@@ -72,6 +74,7 @@ describe('AuthService', () => {
         fail('should have thrown');
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
+        expect(err.info).toBe(AuthErrorInfo.NotAuthenticated);
       }
 
       await authClient.destroySession({ token });
@@ -138,6 +141,7 @@ describe('AuthService', () => {
         sessionCreated = true;
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
+        expect(err.info).toBe(AuthErrorInfo.NotAuthenticated);
         sessionCreated = false;
       }
       expect(sessionCreated).toBe(false);
@@ -163,6 +167,7 @@ describe('AuthService', () => {
         fail('should have thrown');
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
+        expect(err.info).toBe(AuthErrorInfo.NotAuthenticated);
       }
     });
   });
@@ -187,10 +192,10 @@ const authClient = ServiceClient.create<AuthApi>('auth', {
 });
 
 const apiService = new WebSocketApiService({
-  port: 55777,
+  port: 55778,
   signSalt: 'abcd1234',
   nats: { servers: ['nats://localhost:4224'] },
   authTokenCookie: 't',
 });
 
-const authWsClient = WebSocketApiClient.create<AuthApi>('auth', 'ws://localhost:55777');
+const authWsClient = WebSocketApiClient.create<AuthApi>('auth', 'ws://localhost:55778');

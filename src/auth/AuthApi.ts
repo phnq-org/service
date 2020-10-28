@@ -17,6 +17,8 @@
  * and `destroySession`; the token is cached on the WebSocket's state.
  */
 
+import { Anomaly } from '@phnq/message';
+
 export default interface AuthApi {
   identify({ address }: { address: string }): Promise<{ identified: boolean }>;
   createSession(params: CreateSessionParams): Promise<{ accountStatus: AccountStatus; token: string }>;
@@ -31,4 +33,18 @@ type CreateSessionParams =
 
 export interface AccountStatus {
   state: 'created' | 'active' | 'inactive';
+}
+
+export const enum AuthErrorInfo {
+  NotAuthenticated,
+  InvalidAddress,
+  PasswordRulesViolation,
+  InactiveAccount,
+  InvalidCode,
+}
+
+export class AuthError extends Anomaly {
+  constructor(info: AuthErrorInfo) {
+    super('AuthError', info);
+  }
 }

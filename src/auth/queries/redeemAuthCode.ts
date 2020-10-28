@@ -1,6 +1,6 @@
-import { Anomaly } from '@phnq/message';
 import { search } from '@phnq/model';
 
+import { AuthError, AuthErrorInfo } from '../AuthApi';
 import Account from '../model/Account';
 
 const redeemAuthCode = async (code: string, addressAsCode = false): Promise<Account> => {
@@ -11,7 +11,7 @@ const redeemAuthCode = async (code: string, addressAsCode = false): Promise<Acco
   if (account && account.authCode && account.authCode.expiry.getTime() < Date.now()) {
     account.authCode = null;
     await account.save();
-    throw new Anomaly('Invalid code');
+    throw new AuthError(AuthErrorInfo.InvalidCode);
   }
 
   if (account) {
@@ -19,7 +19,7 @@ const redeemAuthCode = async (code: string, addressAsCode = false): Promise<Acco
     return account.save();
   }
 
-  throw new Anomaly('Invalid code');
+  throw new AuthError(AuthErrorInfo.InvalidCode);
 };
 
 export default redeemAuthCode;
