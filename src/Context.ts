@@ -21,16 +21,9 @@ export interface ContextData {
 }
 
 class Context {
-  static apply<T = unknown>(data: ContextData, fn: () => void | Promise<T>): Promise<T> {
+  static apply<T = unknown>(data: ContextData, fn: () => Promise<T>): Promise<T> {
     return new Promise<T>(resolve => {
-      contextLocalStorage.run(Context.current.merge(data), () => {
-        const ret = fn();
-        if (ret) {
-          resolve(ret);
-        } else {
-          resolve();
-        }
-      });
+      contextLocalStorage.run(Context.current.merge(data), () => resolve(fn()));
     });
   }
 

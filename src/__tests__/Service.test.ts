@@ -139,13 +139,13 @@ describe('Service', () => {
   });
 
   it('should retrieve current context', () => {
-    Context.apply({ foo: 'bar' }, () => {
+    Context.apply({ foo: 'bar' }, async () => {
       expect(Context.current.get<string>('foo')).toBe('bar');
     });
   });
 
   it('applies context', async () => {
-    await new Promise(resolve => {
+    await new Promise<void>(resolve => {
       Context.apply({ language: 'icelandic' }, async () => {
         try {
           expect(await fruitClient.getFromContext('language')).toBe('icelandic');

@@ -35,7 +35,7 @@ class WebSocketApiService {
     const { port } = this.config;
 
     log('Starting server...');
-    await new Promise((resolve, reject): void => {
+    await new Promise<void>((resolve, reject): void => {
       try {
         this.httpServer.listen({ port: port }, resolve);
       } catch (err) {
@@ -54,7 +54,7 @@ class WebSocketApiService {
     await this.wsServer.close();
 
     if (this.httpServer.listening) {
-      await new Promise((resolve, reject): void => {
+      await new Promise<void>((resolve, reject): void => {
         try {
           this.httpServer.close((): void => {
             resolve();
