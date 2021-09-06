@@ -2,6 +2,7 @@ import { Anomaly } from '@phnq/message';
 import { MongoDataStore } from '@phnq/model/datastores/MongoDataStore';
 
 import { AuthApi, AuthService, ServiceClient, WebSocketApiService } from '..';
+import { MONGO_URI, NATS_URI } from '../../etc/testenv';
 import { AuthErrorInfo } from '../auth/AuthApi';
 import Account from '../auth/model/Account';
 import Session from '../auth/model/Session';
@@ -44,7 +45,7 @@ describe('AuthService', () => {
         allowedInvalidEmail = true;
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
-        expect(err.info).toBe(AuthErrorInfo.InvalidAddress);
+        expect((err as Anomaly).info).toBe(AuthErrorInfo.InvalidAddress);
         allowedInvalidEmail = false;
       }
       expect(allowedInvalidEmail).toBe(false);
@@ -74,7 +75,7 @@ describe('AuthService', () => {
         fail('should have thrown');
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
-        expect(err.info).toBe(AuthErrorInfo.NotAuthenticated);
+        expect((err as Anomaly).info).toBe(AuthErrorInfo.NotAuthenticated);
       }
 
       await authClient.destroySession({ token });
@@ -141,7 +142,7 @@ describe('AuthService', () => {
         sessionCreated = true;
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
-        expect(err.info).toBe(AuthErrorInfo.NotAuthenticated);
+        expect((err as Anomaly).info).toBe(AuthErrorInfo.NotAuthenticated);
         sessionCreated = false;
       }
       expect(sessionCreated).toBe(false);
@@ -167,7 +168,7 @@ describe('AuthService', () => {
         fail('should have thrown');
       } catch (err) {
         expect(err).toBeInstanceOf(Anomaly);
-        expect(err.info).toBe(AuthErrorInfo.NotAuthenticated);
+        expect((err as Anomaly).info).toBe(AuthErrorInfo.NotAuthenticated);
       }
     });
   });
@@ -178,8 +179,8 @@ describe('AuthService', () => {
 const authService = new AuthService({
   signSalt: 'abcd1234',
   domain: 'auth',
-  nats: { servers: ['nats://localhost:4224'] },
-  datastore: new MongoDataStore('mongodb://localhost:27017/authtest'),
+  nats: { servers: [NATS_URI] },
+  datastore: new MongoDataStore(MONGO_URI),
   authCodeUrl(code) {
     return `http://test.com/code/${code}`;
   },
@@ -188,13 +189,13 @@ const authService = new AuthService({
 
 const authClient = ServiceClient.create<AuthApi>('auth', {
   signSalt: 'abcd1234',
-  nats: { servers: ['nats://localhost:4224'] },
+  nats: { servers: [NATS_URI] },
 });
 
 const apiService = new WebSocketApiService({
   port: 55778,
   signSalt: 'abcd1234',
-  nats: { servers: ['nats://localhost:4224'] },
+  nats: { servers: [NATS_URI] },
   authTokenCookie: 't',
 });
 

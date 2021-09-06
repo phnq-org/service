@@ -14,8 +14,8 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:log": "PHNQ_MESSAGE_LOG_NATS=1 npm t",
-    "pretest": "if [ \"$NO_NATS\" != \"1\" ]; then docker run -d --name nats_phnq_service_test -p 4224:4222 nats; fi",
-    "posttest": "if [ \"$NO_NATS\" != \"1\" ]; then docker stop nats_phnq_service_test; docker rm nats_phnq_service_test; fi",
+    "pretest": "if [ \"$CCI\" != \"1\" ]; then docker run -d --name nats_phnq_service_test -p 4224:4222 nats; docker run -d --name mongo_phnq_service_test -p 27018:27017 mongo; fi",
+    "posttest": "if [ \"$CCI\" != \"1\" ]; then docker stop nats_phnq_service_test; docker rm nats_phnq_service_test; docker stop mongo_phnq_service_test; docker rm mongo_phnq_service_test; fi",
     "lint": "tsc --noEmit && eslint 'src/**/*.{js,ts,tsx}' --quiet --fix",
     "release:patch": "npm run clean; npm version patch; npm run dist; cd dist; npm publish",
     "release:minor": "npm run clean; npm version minor; npm run dist; cd dist; npm publish"

@@ -10,6 +10,7 @@ import { DefaultClient } from './ServiceClient';
 import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
 
 export interface ServiceConfig {
+  /** Provides a way to address this service. A service with no domain is a client only. */
   domain?: string;
   nats: NatsConnectionOptions;
   signSalt: string;
@@ -127,6 +128,11 @@ class Service {
     return payload;
   }
 
+  /**
+   *
+   * @param domain
+   * @returns
+   */
   public getClient<T = unknown>(domain: string): T & DefaultClient {
     return new Proxy(
       {},

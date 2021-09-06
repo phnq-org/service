@@ -2,6 +2,7 @@ import { matchCategory } from '@phnq/log';
 import { Anomaly } from '@phnq/message';
 
 import { Context, Serializable, Service, ServiceClient } from '..';
+import { NATS_URI } from '../../etc/testenv';
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
   matchCategory(/.+/);
@@ -72,7 +73,7 @@ describe('Service', () => {
   it('throws when setting a handler without a domain', () => {
     const anonService = new Service({
       signSalt: 'abcd1234',
-      nats: { servers: ['nats://localhost:4224'] },
+      nats: { servers: [NATS_URI] },
     });
 
     expect(() => {
@@ -83,7 +84,7 @@ describe('Service', () => {
   it('throws when testing latency without a domain', async () => {
     const anonService = new Service({
       signSalt: 'abcd1234',
-      nats: { servers: ['nats://localhost:4224'] },
+      nats: { servers: [NATS_URI] },
     });
 
     try {
@@ -99,7 +100,7 @@ describe('Service', () => {
   it('returns client connected state', async () => {
     const client = ServiceClient.create<FruitApi>('fruit', {
       signSalt: 'abcd1234',
-      nats: { servers: ['nats://localhost:4224'] },
+      nats: { servers: [NATS_URI] },
     });
     expect(client.isConnected).toBe(false);
     await client.connect();
@@ -112,7 +113,7 @@ describe('Service', () => {
     const service = new Service({
       signSalt: 'abcd1234',
       domain: 'some-service',
-      nats: { servers: ['nats://localhost:4224'] },
+      nats: { servers: [NATS_URI] },
     });
     expect(service.isConnected).toBe(false);
     await service.connect();
@@ -124,7 +125,7 @@ describe('Service', () => {
   it('throws if no handler is found', async () => {
     const fruitClientBadApi = ServiceClient.create<{ nope(): Promise<void> }>('fruit', {
       signSalt: 'abcd1234',
-      nats: { servers: ['nats://localhost:4224'] },
+      nats: { servers: [NATS_URI] },
     });
 
     try {
@@ -169,7 +170,7 @@ describe('Service', () => {
 const vegService = new Service({
   signSalt: 'abcd1234',
   domain: 'veg',
-  nats: { servers: ['nats://localhost:4224'] },
+  nats: { servers: [NATS_URI] },
 });
 
 interface VegApi {
@@ -189,7 +190,7 @@ vegService.addHandler('getKinds', getVegKinds);
 const fruitService = new Service({
   signSalt: 'abcd1234',
   domain: 'fruit',
-  nats: { servers: ['nats://localhost:4224'] },
+  nats: { servers: [NATS_URI] },
 });
 
 interface FruitApi {
@@ -251,5 +252,5 @@ fruitService.addHandler('getVeggies', getVeggies);
 
 const fruitClient = ServiceClient.create<FruitApi>('fruit', {
   signSalt: 'abcd1234',
-  nats: { servers: ['nats://localhost:4224'] },
+  nats: { servers: [NATS_URI] },
 });

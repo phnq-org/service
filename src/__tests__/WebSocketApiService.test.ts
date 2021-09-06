@@ -1,6 +1,7 @@
 import { Anomaly } from '@phnq/message';
 
 import { Context, Serializable, Service, WebSocketApiService } from '..';
+import { NATS_URI } from '../../etc/testenv';
 import { WebSocketApiClient } from '../browser';
 
 describe('WebSocketApiService', () => {
@@ -79,7 +80,7 @@ describe('WebSocketApiService', () => {
 const apiService = new WebSocketApiService({
   port: 55777,
   signSalt: 'abcd1234',
-  nats: { servers: ['nats://localhost:4224'] },
+  nats: { servers: [NATS_URI] },
   authTokenCookie: 't',
 });
 
@@ -90,7 +91,7 @@ const fruitWsClientWrongPath = WebSocketApiClient.create<FruitApi>('fruitWs', 'w
 const vegService = new Service({
   signSalt: 'abcd1234',
   domain: 'vegWs',
-  nats: { servers: ['nats://localhost:4224'] },
+  nats: { servers: [NATS_URI] },
 });
 
 interface VegApi {
@@ -110,7 +111,7 @@ vegService.addHandler('getKinds', getVegKinds);
 const fruitService = new Service({
   signSalt: 'abcd1234',
   domain: 'fruitWs',
-  nats: { servers: ['nats://localhost:4224'] },
+  nats: { servers: [NATS_URI] },
 });
 
 interface FruitApi {
