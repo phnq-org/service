@@ -2,7 +2,7 @@ import { matchCategory } from '@phnq/log';
 import { Anomaly } from '@phnq/message';
 
 import { Context, Serializable, Service, ServiceClient } from '..';
-import { NATS_URI } from '../../etc/testenv';
+import { NATS_URI } from './etc/testenv';
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
   matchCategory(/.+/);

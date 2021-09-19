@@ -1,8 +1,8 @@
 import { Anomaly } from '@phnq/message';
 
 import { Context, Serializable, Service, WebSocketApiService } from '..';
-import { NATS_URI } from '../../etc/testenv';
 import { WebSocketApiClient } from '../browser';
+import { NATS_URI } from './etc/testenv';
 
 describe('WebSocketApiService', () => {
   beforeAll(async () => {

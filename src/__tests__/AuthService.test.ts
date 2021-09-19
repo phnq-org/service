@@ -2,11 +2,11 @@ import { Anomaly } from '@phnq/message';
 import { MongoDataStore } from '@phnq/model/datastores/MongoDataStore';
 
 import { AuthApi, AuthService, ServiceClient, WebSocketApiService } from '..';
-import { MONGO_URI, NATS_URI } from '../../etc/testenv';
 import { AuthErrorInfo } from '../auth/AuthApi';
 import Account from '../auth/model/Account';
 import Session from '../auth/model/Session';
 import { WebSocketApiClient } from '../browser';
+import { MONGO_URI, NATS_URI } from './etc/testenv';
 
 describe('AuthService', () => {
   beforeAll(async () => {
