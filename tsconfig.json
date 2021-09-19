@@ -4,7 +4,7 @@
     "module": "commonjs",
     "lib": ["es2015", "esnext.asynciterable"],
     "declaration": true /* Generates corresponding '.d.ts' file. */,
-    "outDir": "./dist/lib" /* Redirect output structure to the directory. */,
+    "outDir": "./dist" /* Redirect output structure to the directory. */,
     "strict": true /* Enable all strict type-checking options. */,
     "noUnusedLocals": true /* Report errors on unused locals. */,
     "noUnusedParameters": true /* Report errors on unused parameters. */,
