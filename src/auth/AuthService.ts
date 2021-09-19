@@ -9,7 +9,7 @@ import setPassword from './handlers/setPassword';
 import Account from './model/Account';
 import Session from './model/Session';
 
-interface AuthServiceConfig extends ServiceConfig {
+interface AuthServiceConfig extends Omit<ServiceConfig, 'handlers'> {
   datastore: DataStore;
   authCodeUrl(code: string): string;
   addressAsCode?: boolean;
@@ -23,18 +23,13 @@ class AuthService extends Service {
   public readonly validatePasswordRules = (password: string): Promise<boolean> => Promise.resolve(password.length >= 6);
 
   public constructor(config: AuthServiceConfig) {
-    super(config);
+    super({ ...config, handlers: { identify, createSession, authenticate, destroySession, setPassword } });
     this.datastore = config.datastore;
     this.authCodeUrl = config.authCodeUrl;
     this.addressAsCode = config.addressAsCode;
     if (config.validatePasswordRules) {
       this.validatePasswordRules = config.validatePasswordRules;
     }
-    this.addHandler('identify', identify);
-    this.addHandler('createSession', createSession);
-    this.addHandler('authenticate', authenticate);
-    this.addHandler('destroySession', destroySession);
-    this.addHandler('setPassword', setPassword);
   }
 
   public async connect(): Promise<void> {

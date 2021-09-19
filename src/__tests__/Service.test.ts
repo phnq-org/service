@@ -70,17 +70,6 @@ describe('Service', () => {
     }
   });
 
-  it('throws when setting a handler without a domain', () => {
-    const anonService = new Service({
-      signSalt: 'abcd1234',
-      nats: { servers: [NATS_URI] },
-    });
-
-    expect(() => {
-      anonService.addHandler('nope', () => Promise.resolve('yo'));
-    }).toThrow();
-  });
-
   it('throws when testing latency without a domain', async () => {
     const anonService = new Service({
       signSalt: 'abcd1234',
@@ -114,6 +103,7 @@ describe('Service', () => {
       signSalt: 'abcd1234',
       domain: 'some-service',
       nats: { servers: [NATS_URI] },
+      handlers: {},
     });
     expect(service.isConnected).toBe(false);
     await service.connect();
@@ -167,12 +157,6 @@ describe('Service', () => {
 
 // ========================== TEST INFRASTRUCTURE ==========================
 
-const vegService = new Service({
-  signSalt: 'abcd1234',
-  domain: 'veg',
-  nats: { servers: [NATS_URI] },
-});
-
 interface VegApi {
   getKinds(): Promise<string[]>;
 }
@@ -185,12 +169,11 @@ const getVegKinds: VegApi['getKinds'] = async () => {
   return ['carrot', 'celery', 'broccoli'];
 };
 
-vegService.addHandler('getKinds', getVegKinds);
-
-const fruitService = new Service({
+const vegService = new Service({
   signSalt: 'abcd1234',
-  domain: 'fruit',
+  domain: 'veg',
   nats: { servers: [NATS_URI] },
+  handlers: { getKinds: getVegKinds },
 });
 
 interface FruitApi {
@@ -244,11 +227,12 @@ const getVeggies: FruitApi['getVeggies'] = async () => {
   throw new Error('getClient not defined');
 };
 
-fruitService.addHandler('getKinds', getKinds);
-fruitService.addHandler('getKindsIterator', getKindsIterator);
-fruitService.addHandler('doErrors', doErrors);
-fruitService.addHandler('getFromContext', getFromContext);
-fruitService.addHandler('getVeggies', getVeggies);
+const fruitService = new Service({
+  signSalt: 'abcd1234',
+  domain: 'fruit',
+  nats: { servers: [NATS_URI] },
+  handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies },
+});
 
 const fruitClient = ServiceClient.create<FruitApi>('fruit', {
   signSalt: 'abcd1234',

@@ -14,6 +14,7 @@ export interface ServiceConfig {
   domain?: string;
   nats: NatsConnectionOptions;
   signSalt: string;
+  handlers?: { [key: string]: ServiceHandler };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,7 +25,7 @@ class Service {
   private config: ServiceConfig;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
   private connection?: MessageConnection<ServiceRequestMessage, ServiceResponseMessage>;
-  private handlers = new Map<string, ServiceHandler>();
+  private readonly handlers: { [key: string]: ServiceHandler };
   private readonly origin = uuid().replace(/[^\w]/g, '');
   private connected = false;
 
@@ -32,6 +33,7 @@ class Service {
     this.log = createLogger(config.domain || 'client');
     this.config = config;
     this.transport = DEFAULT_TRANSPORT;
+    this.handlers = Object.freeze({ ...config.handlers, ping: async () => 'pong' });
   }
 
   public get isConnected(): boolean {
@@ -71,7 +73,6 @@ class Service {
 
     if (domain) {
       this.connection.onReceive = message => this.handleRequest(message);
-      this.handlers.set('ping', () => Promise.resolve('pong'));
     }
 
     this.connected = true;
@@ -82,18 +83,6 @@ class Service {
       await this.transport.close();
       this.connected = false;
     }
-  }
-
-  public addHandler(method: string, handler: ServiceHandler): void {
-    if (!this.config.domain) {
-      throw new Error('Handlers can only be set if a domain is configured');
-    }
-
-    this.handlers.set(method, handler);
-  }
-
-  public deleteHandler(method: string): void {
-    this.handlers.delete(method);
   }
 
   /**
@@ -193,7 +182,7 @@ class Service {
   }: ServiceRequestMessage): Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>> {
     const start = process.hrtime.bigint();
 
-    const handler = this.handlers.get(method);
+    const handler = this.handlers[method];
     if (handler) {
       return new Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>>(
         async (resolve, reject) => {

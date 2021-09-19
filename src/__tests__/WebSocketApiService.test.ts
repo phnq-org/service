@@ -88,12 +88,6 @@ const fruitWsClient = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://local
 const fruitWsClientWrongPort = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55778');
 const fruitWsClientWrongPath = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777/wrong-path');
 
-const vegService = new Service({
-  signSalt: 'abcd1234',
-  domain: 'vegWs',
-  nats: { servers: [NATS_URI] },
-});
-
 interface VegApi {
   getKinds(): Promise<string[]>;
 }
@@ -106,12 +100,11 @@ const getVegKinds: VegApi['getKinds'] = async () => {
   return ['carrot', 'celery', 'broccoli'];
 };
 
-vegService.addHandler('getKinds', getVegKinds);
-
-const fruitService = new Service({
+const vegService = new Service({
   signSalt: 'abcd1234',
-  domain: 'fruitWs',
+  domain: 'vegWs',
   nats: { servers: [NATS_URI] },
+  handlers: { getKinds: getVegKinds },
 });
 
 interface FruitApi {
@@ -164,8 +157,9 @@ const getVeggies: FruitApi['getVeggies'] = async () => {
   throw new Error('getClient not defined');
 };
 
-fruitService.addHandler('getKinds', getKinds);
-fruitService.addHandler('getKindsIterator', getKindsIterator);
-fruitService.addHandler('doErrors', doErrors);
-fruitService.addHandler('getFromContext', getFromContext);
-fruitService.addHandler('getVeggies', getVeggies);
+const fruitService = new Service({
+  signSalt: 'abcd1234',
+  domain: 'fruitWs',
+  nats: { servers: [NATS_URI] },
+  handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies },
+});
