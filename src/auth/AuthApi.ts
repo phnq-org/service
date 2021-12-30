@@ -35,7 +35,7 @@ export interface AccountStatus {
   state: 'created' | 'active' | 'inactive';
 }
 
-export const enum AuthErrorInfo {
+export enum AuthErrorInfo {
   NotAuthenticated,
   InvalidAddress,
   PasswordRulesViolation,
