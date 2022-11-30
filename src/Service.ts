@@ -2,7 +2,7 @@ import { createLogger } from '@phnq/log';
 import { Logger } from '@phnq/log/logger';
 import { Anomaly, AnomalyMessage, ErrorMessage, MessageConnection, MessageTransport, MessageType } from '@phnq/message';
 import { NATSTransport } from '@phnq/message/transports/NATSTransport';
-import { NatsConnectionOptions } from 'ts-nats';
+import { ConnectionOptions } from 'nats';
 import { v4 as uuid } from 'uuid';
 
 import Context from './Context';
@@ -12,7 +12,7 @@ import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from '.
 export interface ServiceConfig {
   /** Provides a way to address this service. A service with no domain is a client only. */
   domain?: string;
-  nats: NatsConnectionOptions;
+  nats: ConnectionOptions;
   signSalt: string;
   handlers?: { [key: string]: ServiceHandler };
 }
