@@ -8,7 +8,7 @@
     "url": "git+https://github.com/pgostovic/service.git"
   },
   "scripts": {
-    "dist": "tsc",
+    "dist": "tsc --skipLibCheck",
     "postdist": "ts-node scripts/postdist",
     "clean": "rimraf dist",
     "test": "jest",
