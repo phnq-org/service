@@ -1,18 +1,20 @@
-import { search } from '@phnq/model';
 import bcrypt from 'bcrypt';
+import cryptoRandomString from 'crypto-random-string';
 
 import Context from '../../Context';
 import AuthApi, { AuthError, AuthErrorInfo } from '../AuthApi';
+import AuthPersistence, { Account, Session } from '../AuthPersistence';
 import AuthService from '../AuthService';
-import Account from '../model/Account';
-import Session from '../model/Session';
-import redeemAuthCode from '../queries/redeemAuthCode';
 import destroySession from './destroySession';
+
+const CREDENTIALS_SESSION_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 const createSession: AuthApi['createSession'] = async (
   { code, address = Context.current.identity, password },
   service?: AuthService,
 ) => {
+  const persistence = service!.persistence;
+
   if (Context.current.authToken) {
     await destroySession({ token: Context.current.authToken });
   }
@@ -20,13 +22,16 @@ const createSession: AuthApi['createSession'] = async (
   const useAddressAsCode = service!.useAddressAsCode() || false;
   let session: Session | undefined;
   if (code) {
-    session = await createSessionWithCode(code, useAddressAsCode!);
+    session = await createSessionWithCode(code, useAddressAsCode, persistence);
   } else if (address && password) {
-    session = await createSessionWithCredentials(address, password);
+    session = await createSessionWithCredentials(address, password, persistence);
   }
 
   if (session) {
-    const account = await session.account;
+    const account = await persistence.findAccount({ id: session.accountId });
+    if (!account) {
+      throw new AuthError(AuthErrorInfo.NotAuthenticated);
+    }
     Context.current.identity = account.address;
     Context.current.authToken = session.token;
     return { token: session.token, accountStatus: account.status };
@@ -35,35 +40,71 @@ const createSession: AuthApi['createSession'] = async (
   throw new AuthError(AuthErrorInfo.NotAuthenticated);
 };
 
-const createSessionWithCode = async (code: string, useAddressAsCode: boolean): Promise<Session | undefined> => {
-  let account = await redeemAuthCode(code, useAddressAsCode);
+const createSessionWithCode = async (
+  code: string,
+  useAddressAsCode: boolean,
+  persistence: AuthPersistence,
+): Promise<Session | undefined> => {
+  let account: Account | undefined = await redeemAuthCode(code, useAddressAsCode, persistence);
   if (account) {
     if (account.status.state === 'created') {
-      account.status.state = 'active';
-      account = await account.save();
+      account = await persistence.updateAccount(account.id, { status: { state: 'active' } });
     }
-    if (account.status.state === 'active') {
-      const session = new Session(account);
-      await session.save();
-      return session;
+    if (account?.status.state === 'active') {
+      return await persistence.createSession({
+        accountId: account.id,
+        token: cryptoRandomString({ length: 20, type: 'url-safe' }),
+        expiry: new Date(Date.now() + CREDENTIALS_SESSION_EXPIRY),
+        active: true,
+      });
     }
   }
   return undefined;
 };
 
-const createSessionWithCredentials = async (address: string, password: string): Promise<Session | undefined> => {
-  const account = await search(Account, { address }).first();
+const createSessionWithCredentials = async (
+  address: string,
+  password: string,
+  persistence: AuthPersistence,
+): Promise<Session | undefined> => {
+  const account = await persistence.findAccount({ address });
+
   if (
     account &&
     account.password &&
     (await bcrypt.compare(password, account.password)) &&
     account.status.state === 'active'
   ) {
-    const session = new Session(account);
-    await session.save();
-    return session;
+    return await persistence.createSession({
+      accountId: account.id,
+      token: cryptoRandomString({ length: 20, type: 'url-safe' }),
+      expiry: new Date(Date.now() + CREDENTIALS_SESSION_EXPIRY),
+      active: true,
+    });
   }
   return undefined;
+};
+
+const redeemAuthCode = async (
+  code: string,
+  addressAsCode = false,
+  persistence: AuthPersistence,
+): Promise<Account | undefined> => {
+  const account =
+    addressAsCode && code.match(/^CODE:/)
+      ? await persistence.findAccount({ address: code.substring('CODE:'.length) })
+      : await persistence.findAccount({ code });
+
+  if (account && account.authCode && account.authCode.expiry.getTime() < Date.now()) {
+    await persistence.updateAccount(account.id, { authCode: null });
+    throw new AuthError(AuthErrorInfo.InvalidCode);
+  }
+
+  if (account) {
+    return await persistence.updateAccount(account.id, { authCode: null });
+  }
+
+  throw new AuthError(AuthErrorInfo.InvalidCode);
 };
 
 export default createSession;

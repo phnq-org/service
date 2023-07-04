@@ -1,10 +1,8 @@
-import { search } from '@phnq/model';
 import bcrypt from 'bcrypt';
 
 import Context from '../../Context';
 import AuthApi, { AuthError, AuthErrorInfo } from '../AuthApi';
 import AuthService from '../AuthService';
-import Session from '../model/Session';
 
 const setPassword: AuthApi['setPassword'] = async (
   { password, token = Context.current.authToken },
@@ -14,12 +12,18 @@ const setPassword: AuthApi['setPassword'] = async (
     throw new AuthError(AuthErrorInfo.PasswordRulesViolation);
   }
 
-  const session = await search(Session, { token }).first();
-  if (session) {
-    const account = await session.account;
-    account.password = await bcrypt.hash(password, 5);
-    await account.save();
-    return { passwordSet: true };
+  const persistence = service!.persistence;
+
+  if (token) {
+    const session = await persistence.findSession({ token });
+
+    if (session) {
+      const account = await persistence.findAccount({ id: session.accountId });
+      if (account) {
+        await persistence.updateAccount(account.id, { password: await bcrypt.hash(password, 5) });
+      }
+      return { passwordSet: true };
+    }
   }
   throw new AuthError(AuthErrorInfo.NotAuthenticated);
 };

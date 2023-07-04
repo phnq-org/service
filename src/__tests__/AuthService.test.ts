@@ -1,12 +1,12 @@
 import { Anomaly } from '@phnq/message';
-import { MongoDataStore } from '@phnq/model/datastores/MongoDataStore';
 
 import { AuthApi, AuthService, ServiceClient, WebSocketApiService } from '..';
 import { AuthErrorInfo } from '../auth/AuthApi';
-import Account from '../auth/model/Account';
-import Session from '../auth/model/Session';
+import { InMemoryAuthPersistence } from '../auth/AuthPersistence';
 import { WebSocketApiClient } from '../browser';
-import { MONGO_URI, NATS_URI } from './etc/testenv';
+import { NATS_URI } from './etc/testenv';
+
+const persistence = new InMemoryAuthPersistence();
 
 describe('AuthService', () => {
   beforeAll(async () => {
@@ -23,9 +23,8 @@ describe('AuthService', () => {
     await authWsClient.disconnect();
   });
 
-  beforeEach(async () => {
-    await Account.delete({});
-    await Session.delete({});
+  beforeEach(() => {
+    persistence.reset();
   });
 
   test('ping', async () => {
@@ -180,11 +179,11 @@ const authService = new AuthService({
   signSalt: 'abcd1234',
   domain: 'auth',
   nats: { servers: [NATS_URI] },
-  datastore: new MongoDataStore(MONGO_URI),
   authCodeUrl(code) {
     return `http://test.com/code/${code}`;
   },
   addressAsCode: true,
+  persistence,
 });
 
 const authClient = ServiceClient.create<AuthApi>('auth', {

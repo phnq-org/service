@@ -1,15 +1,16 @@
-import { search } from '@phnq/model';
-
 import Context from '../../Context';
 import AuthApi from '../AuthApi';
-import Session from '../model/Session';
+import AuthService from '../AuthService';
 
-const destroySession: AuthApi['destroySession'] = async ({ token = Context.current.authToken } = {}) => {
+const destroySession: AuthApi['destroySession'] = async (
+  { token = Context.current.authToken } = {},
+  service?: AuthService,
+) => {
   if (token) {
-    const session = await search(Session, { token }).first();
-    if (session && session.isValid) {
-      session.active = false;
-      await session.save();
+    const persistence = service!.persistence;
+    const session = await persistence.findSession({ token });
+    if (session) {
+      await persistence.updateSession(session.id, { active: false });
     }
   }
   // Don't care about confirming valid session since we're just blanking out stuff anyway.
