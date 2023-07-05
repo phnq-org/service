@@ -1,7 +1,6 @@
 import { AccountStatus } from './AuthApi';
 
 export interface Account {
-  id: unknown;
   address: string;
   password?: string;
   authCode: { code: string; expiry: Date } | null;
@@ -9,21 +8,20 @@ export interface Account {
 }
 
 export interface Session {
-  id: unknown;
-  accountId: Account['id'];
   token: string;
+  accountAddress: Account['address'];
   expiry: Date;
   active: boolean;
 }
 
 export default interface AuthPersistence {
-  findAccount(q: { id: unknown } | { address: string } | { code: string }): Promise<Account | undefined>;
-  createAccount(account: Omit<Account, 'id'>): Promise<Account>;
-  updateAccount(id: unknown, updates: Partial<Omit<Account, 'id'>>): Promise<Account | undefined>;
+  findAccount(q: { address: string } | { code: string }): Promise<Account | undefined>;
+  createAccount(account: Account): Promise<Account>;
+  updateAccount(address: string, updates: Partial<Omit<Account, 'address'>>): Promise<Account | undefined>;
 
   findSession(q: { token: string }): Promise<Session | undefined>;
-  createSession(session: Omit<Session, 'id'>): Promise<Session>;
-  updateSession(id: unknown, updates: Partial<Omit<Session, 'id'>>): Promise<Session | undefined>;
+  createSession(session: Session): Promise<Session>;
+  updateSession(token: string, updates: Partial<Omit<Session, 'token'>>): Promise<Session | undefined>;
 }
 
 /**
@@ -38,11 +36,9 @@ export class InMemoryAuthPersistence implements AuthPersistence {
     this.sessions = [];
   }
 
-  async findAccount(q: { id: unknown } | { address: string } | { code: string }): Promise<Account | undefined> {
-    const { id, address, code } = q as Partial<{ id: unknown; address: string; code: string }>;
-    if (id) {
-      return this.accounts.find(a => a.id === id);
-    } else if (address) {
+  async findAccount(q: { address: string } | { code: string }): Promise<Account | undefined> {
+    const { address, code } = q as Partial<{ address: string; code: string }>;
+    if (address) {
       return this.accounts.find(a => a.address === address);
     } else if (code) {
       return this.accounts.find(a => a.authCode?.code === code);
@@ -50,19 +46,19 @@ export class InMemoryAuthPersistence implements AuthPersistence {
     return undefined;
   }
 
-  async createAccount(account: Omit<Account, 'id'>): Promise<Account> {
-    const newAccount = { ...account, id: idIter.next().value };
+  async createAccount(account: Account): Promise<Account> {
+    const newAccount = { ...account };
     this.accounts.push(newAccount);
     return newAccount;
   }
 
-  async updateAccount(id: unknown, updates: Partial<Omit<Account, 'id'>>): Promise<Account | undefined> {
-    const account = this.accounts.find(a => a.id === id);
+  async updateAccount(address: string, updates: Partial<Omit<Account, 'address'>>): Promise<Account | undefined> {
+    const account = this.accounts.find(a => a.address === address);
     if (!account) {
       return undefined;
     }
     const updatedAccount = { ...account, ...updates };
-    this.accounts = this.accounts.map(a => (a.id === id ? updatedAccount : a));
+    this.accounts = this.accounts.map(a => (a.address === address ? updatedAccount : a));
     return updatedAccount;
   }
 
@@ -70,27 +66,19 @@ export class InMemoryAuthPersistence implements AuthPersistence {
     return this.sessions.find(s => s.token === token);
   }
 
-  async createSession(session: Omit<Session, 'id'>): Promise<Session> {
-    const newSession = { ...session, id: idIter.next().value };
+  async createSession(session: Session): Promise<Session> {
+    const newSession = { ...session };
     this.sessions.push(newSession);
     return newSession;
   }
 
-  async updateSession(id: unknown, updates: Partial<Omit<Session, 'id'>>): Promise<Session | undefined> {
-    const session = this.sessions.find(s => s.id === id);
+  async updateSession(token: string, updates: Partial<Omit<Session, 'id'>>): Promise<Session | undefined> {
+    const session = this.sessions.find(s => s.token === token);
     if (!session) {
       return undefined;
     }
     const updatedSession = { ...session, ...updates };
-    this.sessions = this.sessions.map(s => (s.id === id ? updatedSession : s));
+    this.sessions = this.sessions.map(s => (s.token === token ? updatedSession : s));
     return updatedSession;
   }
 }
-
-const idIter = (function* nameGen() {
-  let i = 0;
-  while (true) {
-    i += 1;
-    yield i;
-  }
-})();

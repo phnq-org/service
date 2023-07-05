@@ -27,7 +27,7 @@ const createSession: AuthApi['createSession'] = async (
   }
 
   if (session) {
-    const account = await persistence.findAccount({ id: session.accountId });
+    const account = await persistence.findAccount({ address: session.accountAddress });
     if (!account) {
       throw new AuthError(AuthErrorInfo.NotAuthenticated);
     }
@@ -47,12 +47,12 @@ const createSessionWithCode = async (
   let account: Account | undefined = await redeemAuthCode(code, useAddressAsCode, service);
   if (account) {
     if (account.status.state === 'created') {
-      account = await service.persistence.updateAccount(account.id, { status: { state: 'active' } });
+      account = await service.persistence.updateAccount(account.address, { status: { state: 'active' } });
     }
     if (account?.status.state === 'active') {
       return await service.persistence.createSession({
-        accountId: account.id,
         token: cryptoRandomString({ length: 20, type: 'url-safe' }),
+        accountAddress: account.address,
         expiry: new Date(Date.now() + CREDENTIALS_SESSION_EXPIRY),
         active: true,
       });
@@ -75,8 +75,8 @@ const createSessionWithCredentials = async (
     account.status.state === 'active'
   ) {
     return await service.persistence.createSession({
-      accountId: account.id,
       token: cryptoRandomString({ length: 20, type: 'url-safe' }),
+      accountAddress: account.address,
       expiry: new Date(Date.now() + CREDENTIALS_SESSION_EXPIRY),
       active: true,
     });
@@ -95,12 +95,12 @@ const redeemAuthCode = async (
       : await service.persistence.findAccount({ code });
 
   if (account && account.authCode && account.authCode.expiry.getTime() < Date.now()) {
-    await service.persistence.updateAccount(account.id, { authCode: null });
+    await service.persistence.updateAccount(account.address, { authCode: null });
     throw new AuthError(AuthErrorInfo.InvalidCode);
   }
 
   if (account) {
-    return await service.persistence.updateAccount(account.id, { authCode: null });
+    return await service.persistence.updateAccount(account.address, { authCode: null });
   }
 
   throw new AuthError(AuthErrorInfo.InvalidCode);

@@ -10,7 +10,7 @@ const destroySession: AuthApi['destroySession'] = async (
     const persistence = service!.persistence;
     const session = await persistence.findSession({ token });
     if (session) {
-      await persistence.updateSession(session.id, { active: false });
+      await persistence.updateSession(session.token, { active: false });
     }
   }
   // Don't care about confirming valid session since we're just blanking out stuff anyway.

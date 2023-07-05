@@ -16,9 +16,9 @@ const setPassword: AuthApi['setPassword'] = async (
     const session = await persistence.findSession({ token });
 
     if (session) {
-      const account = await persistence.findAccount({ id: session.accountId });
+      const account = await persistence.findAccount({ address: session.accountAddress });
       if (account) {
-        await persistence.updateAccount(account.id, { password: await service!.hashPassword(password) });
+        await persistence.updateAccount(account.address, { password: await service!.hashPassword(password) });
       }
       return { passwordSet: true };
     }

@@ -12,7 +12,7 @@ const authenticate: AuthApi['authenticate'] = async (
 
     const session = await persistence.findSession({ token });
     if (session && isSessionValid(session)) {
-      const account = await persistence.findAccount({ id: session.accountId });
+      const account = await persistence.findAccount({ address: session.accountAddress });
       if (account) {
         Context.current.identity = account.address;
         Context.current.authToken = token;

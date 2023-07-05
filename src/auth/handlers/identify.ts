@@ -1,4 +1,5 @@
 import { createLogger } from '@phnq/log';
+import assert from 'assert';
 import cryptoRandomString from 'crypto-random-string';
 import isEmail from 'validator/lib/isEmail';
 import isMobilePhone from 'validator/lib/isMobilePhone';
@@ -23,13 +24,15 @@ const identify: AuthApi['identify'] = async ({ address }, service?: AuthService)
 
   const persistence = service!.persistence;
 
-  const { id } =
+  const { address: addressKey } =
     (await persistence.findAccount({ address })) ||
     (await persistence.createAccount({ address, status: { state: 'created' }, authCode: null }));
 
+  assert.strictEqual(addressKey, address);
+
   const code = cryptoRandomString({ length: 10, type: 'url-safe' });
   const expiry = new Date(Date.now() + AUTH_CODE_EXPIRY);
-  const account = await persistence.updateAccount(id, { authCode: { code, expiry } });
+  const account = await persistence.updateAccount(address, { authCode: { code, expiry } });
 
   Context.current.identity = address;
 
