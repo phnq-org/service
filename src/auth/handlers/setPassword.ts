@@ -1,5 +1,3 @@
-import bcrypt from 'bcrypt';
-
 import Context from '../../Context';
 import AuthApi, { AuthError, AuthErrorInfo } from '../AuthApi';
 import AuthService from '../AuthService';
@@ -20,7 +18,7 @@ const setPassword: AuthApi['setPassword'] = async (
     if (session) {
       const account = await persistence.findAccount({ id: session.accountId });
       if (account) {
-        await persistence.updateAccount(account.id, { password: await bcrypt.hash(password, 5) });
+        await persistence.updateAccount(account.id, { password: await service!.hashPassword(password) });
       }
       return { passwordSet: true };
     }

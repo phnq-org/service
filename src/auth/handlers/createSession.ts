@@ -1,9 +1,8 @@
-import bcrypt from 'bcrypt';
 import cryptoRandomString from 'crypto-random-string';
 
 import Context from '../../Context';
 import AuthApi, { AuthError, AuthErrorInfo } from '../AuthApi';
-import AuthPersistence, { Account, Session } from '../AuthPersistence';
+import { Account, Session } from '../AuthPersistence';
 import AuthService from '../AuthService';
 import destroySession from './destroySession';
 
@@ -22,9 +21,9 @@ const createSession: AuthApi['createSession'] = async (
   const useAddressAsCode = service!.useAddressAsCode() || false;
   let session: Session | undefined;
   if (code) {
-    session = await createSessionWithCode(code, useAddressAsCode, persistence);
+    session = await createSessionWithCode(code, useAddressAsCode, service!);
   } else if (address && password) {
-    session = await createSessionWithCredentials(address, password, persistence);
+    session = await createSessionWithCredentials(address, password, service!);
   }
 
   if (session) {
@@ -43,15 +42,15 @@ const createSession: AuthApi['createSession'] = async (
 const createSessionWithCode = async (
   code: string,
   useAddressAsCode: boolean,
-  persistence: AuthPersistence,
+  service: AuthService,
 ): Promise<Session | undefined> => {
-  let account: Account | undefined = await redeemAuthCode(code, useAddressAsCode, persistence);
+  let account: Account | undefined = await redeemAuthCode(code, useAddressAsCode, service);
   if (account) {
     if (account.status.state === 'created') {
-      account = await persistence.updateAccount(account.id, { status: { state: 'active' } });
+      account = await service.persistence.updateAccount(account.id, { status: { state: 'active' } });
     }
     if (account?.status.state === 'active') {
-      return await persistence.createSession({
+      return await service.persistence.createSession({
         accountId: account.id,
         token: cryptoRandomString({ length: 20, type: 'url-safe' }),
         expiry: new Date(Date.now() + CREDENTIALS_SESSION_EXPIRY),
@@ -65,17 +64,17 @@ const createSessionWithCode = async (
 const createSessionWithCredentials = async (
   address: string,
   password: string,
-  persistence: AuthPersistence,
+  service: AuthService,
 ): Promise<Session | undefined> => {
-  const account = await persistence.findAccount({ address });
+  const account = await service.persistence.findAccount({ address });
 
   if (
     account &&
     account.password &&
-    (await bcrypt.compare(password, account.password)) &&
+    (await service.hashPassword(password)) === account.password &&
     account.status.state === 'active'
   ) {
-    return await persistence.createSession({
+    return await service.persistence.createSession({
       accountId: account.id,
       token: cryptoRandomString({ length: 20, type: 'url-safe' }),
       expiry: new Date(Date.now() + CREDENTIALS_SESSION_EXPIRY),
@@ -88,20 +87,20 @@ const createSessionWithCredentials = async (
 const redeemAuthCode = async (
   code: string,
   addressAsCode = false,
-  persistence: AuthPersistence,
+  service: AuthService,
 ): Promise<Account | undefined> => {
   const account =
     addressAsCode && code.match(/^CODE:/)
-      ? await persistence.findAccount({ address: code.substring('CODE:'.length) })
-      : await persistence.findAccount({ code });
+      ? await service.persistence.findAccount({ address: code.substring('CODE:'.length) })
+      : await service.persistence.findAccount({ code });
 
   if (account && account.authCode && account.authCode.expiry.getTime() < Date.now()) {
-    await persistence.updateAccount(account.id, { authCode: null });
+    await service.persistence.updateAccount(account.id, { authCode: null });
     throw new AuthError(AuthErrorInfo.InvalidCode);
   }
 
   if (account) {
-    return await persistence.updateAccount(account.id, { authCode: null });
+    return await service.persistence.updateAccount(account.id, { authCode: null });
   }
 
   throw new AuthError(AuthErrorInfo.InvalidCode);

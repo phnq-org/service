@@ -28,16 +28,16 @@
   "dependencies": {
     "@phnq/log": "^1.1.4",
     "@phnq/message": "^1.13.5",
-    "@types/bcrypt": "^3.0.1",
     "@types/validator": "^13.1.4",
-    "bcrypt": "^5.0.1",
     "crypto-random-string": "^3.3.1",
+    "md5": "^2.3.0",
     "nats": "^2.9.1",
     "uuid": "^9.0.0",
     "validator": "^13.6.0"
   },
   "devDependencies": {
     "@types/jest": "^26.0.23",
+    "@types/md5": "^2.3.2",
     "@types/uuid": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^4.26.1",
     "@typescript-eslint/parser": "^4.26.1",
