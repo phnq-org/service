@@ -72,7 +72,14 @@ class Service {
     });
 
     if (domain) {
-      this.connection.onReceive = message => this.handleRequest(message);
+      this.connection.onReceive = message => {
+        try {
+          return this.handleRequest(message);
+        } catch (err) {
+          this.log.error('Error handling request.', err);
+          throw err;
+        }
+      };
     }
 
     this.connected = true;
