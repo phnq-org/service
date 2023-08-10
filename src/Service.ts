@@ -181,7 +181,7 @@ class Service {
     ) as T & DefaultClient;
   }
 
-  private async handleRequest({
+  private handleRequest({
     method,
     origin,
     payload,
