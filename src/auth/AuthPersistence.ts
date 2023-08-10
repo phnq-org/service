@@ -15,7 +15,7 @@ export interface Session {
 }
 
 export default interface AuthPersistence {
-  findAccount(q: { address: string; code: never } | { code: string; address: never }): Promise<Account | undefined>;
+  findAccount(q: { address: string; code?: never } | { code: string; address?: never }): Promise<Account | undefined>;
   createAccount(account: Account): Promise<Account>;
   updateAccount(address: string, updates: Partial<Omit<Account, 'address'>>): Promise<Account | undefined>;
 
@@ -37,7 +37,7 @@ export class InMemoryAuthPersistence implements AuthPersistence {
   }
 
   async findAccount(
-    q: { address: string; code: never } | { code: string; address: never },
+    q: { address: string; code?: never } | { code: string; address?: never },
   ): Promise<Account | undefined> {
     const { address, code } = q;
     if (address) {
