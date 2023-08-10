@@ -15,7 +15,7 @@ export interface Session {
 }
 
 export default interface AuthPersistence {
-  findAccount(q: { address: string } | { code: string }): Promise<Account | undefined>;
+  findAccount(q: { address: string; code: never } | { code: string; address: never }): Promise<Account | undefined>;
   createAccount(account: Account): Promise<Account>;
   updateAccount(address: string, updates: Partial<Omit<Account, 'address'>>): Promise<Account | undefined>;
 
@@ -36,8 +36,10 @@ export class InMemoryAuthPersistence implements AuthPersistence {
     this.sessions = [];
   }
 
-  async findAccount(q: { address: string } | { code: string }): Promise<Account | undefined> {
-    const { address, code } = q as Partial<{ address: string; code: string }>;
+  async findAccount(
+    q: { address: string; code: never } | { code: string; address: never },
+  ): Promise<Account | undefined> {
+    const { address, code } = q;
     if (address) {
       return this.accounts.find(a => a.address === address);
     } else if (code) {
