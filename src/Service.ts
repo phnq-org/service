@@ -72,14 +72,7 @@ class Service {
     });
 
     if (domain) {
-      this.connection.onReceive = async message => {
-        try {
-          return await this.handleRequest(message);
-        } catch (err) {
-          this.log.error(`Error handling request [${message.method}]`).stack(err);
-          throw err;
-        }
-      };
+      this.connection.onReceive = message => this.handleRequest(message);
     }
 
     this.connected = true;
@@ -221,6 +214,7 @@ class Service {
               });
             }
           } catch (err) {
+            this.log.error(`Error handling request [${method}]`).stack(err);
             reject(err);
           }
         });
