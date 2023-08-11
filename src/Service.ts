@@ -72,9 +72,9 @@ class Service {
     });
 
     if (domain) {
-      this.connection.onReceive = message => {
+      this.connection.onReceive = async message => {
         try {
-          return this.handleRequest(message);
+          return await this.handleRequest(message);
         } catch (err) {
           this.log.error('Error handling request.', err);
           throw err;
@@ -191,42 +191,40 @@ class Service {
 
     const handler = this.handlers[method];
     if (handler) {
-      return new Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>>(
-        async (resolve, reject) => {
-          Context.apply(contextData, async () => {
-            try {
-              Context.current.getClient = <T = unknown>(domain: string): T & DefaultClient => this.getClient(domain);
-              const response = await handler(payload, this);
-              if (
-                typeof response === 'object' &&
-                (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]
-              ) {
-                resolve(
-                  (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
-                    for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
-                      yield {
-                        origin,
-                        payload,
-                        stats: { time: Number(process.hrtime.bigint() - start) },
-                        sharedContextData: Context.current.sharedData,
-                      };
-                    }
-                  })(),
-                );
-              } else {
-                resolve({
-                  origin,
-                  payload: response,
-                  stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
-                  sharedContextData: Context.current.sharedData,
-                });
-              }
-            } catch (err) {
-              reject(err);
+      return new Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>>((resolve, reject) => {
+        Context.apply(contextData, async () => {
+          try {
+            Context.current.getClient = <T = unknown>(domain: string): T & DefaultClient => this.getClient(domain);
+            const response = await handler(payload, this);
+            if (
+              typeof response === 'object' &&
+              (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]
+            ) {
+              resolve(
+                (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
+                  for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
+                    yield {
+                      origin,
+                      payload,
+                      stats: { time: Number(process.hrtime.bigint() - start) },
+                      sharedContextData: Context.current.sharedData,
+                    };
+                  }
+                })(),
+              );
+            } else {
+              resolve({
+                origin,
+                payload: response,
+                stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
+                sharedContextData: Context.current.sharedData,
+              });
             }
-          });
-        },
-      );
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
     }
     throw new Anomaly(`No handler for method: ${method}`);
   }
