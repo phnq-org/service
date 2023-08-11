@@ -76,7 +76,7 @@ class Service {
         try {
           return await this.handleRequest(message);
         } catch (err) {
-          this.log.error('Error handling request.', err);
+          this.log.error('Error handling request').stack();
           throw err;
         }
       };
