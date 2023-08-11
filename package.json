@@ -26,7 +26,7 @@
   "author": "Patrick Gostovic",
   "license": "ISC",
   "dependencies": {
-    "@phnq/log": "^1.1.4",
+    "@phnq/log": "^1.1.5",
     "@phnq/message": "^1.13.5",
     "@types/validator": "^13.1.4",
     "crypto-random-string": "^3.3.1",
