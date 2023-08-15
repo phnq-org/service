@@ -15,6 +15,8 @@ export interface ServiceConfig {
   nats: ConnectionOptions;
   signSalt: string;
   handlers?: { [key: string]: ServiceHandler };
+  /** Time (ms) alotted for a response before a timeout error. */
+  responseTimeout?: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,7 +43,7 @@ class Service {
   }
 
   public async connect(): Promise<void> {
-    const { domain, nats, signSalt } = this.config;
+    const { domain, nats, signSalt, responseTimeout } = this.config;
 
     if (this.connected) {
       return;
@@ -70,6 +72,10 @@ class Service {
       marshalPayload: p => this.marshalPayload(p),
       unmarshalPayload: p => this.unmarshalPayload(p),
     });
+
+    if (responseTimeout !== undefined) {
+      this.connection.responseTimeout = responseTimeout;
+    }
 
     if (domain) {
       this.connection.onReceive = message => this.handleRequest(message);
