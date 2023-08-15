@@ -12,6 +12,8 @@ const log = createLogger('WebSocketApiService');
 interface Config extends ServiceConfig {
   port: number;
   authTokenCookie?: string;
+  transformResponsePayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
+  transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
 }
 
 class WebSocketApiService {
@@ -85,8 +87,13 @@ class WebSocketApiService {
 
   private async onReceiveClientMessage(
     conn: MessageConnection<ApiRequestMessage, ApiResponseMessage>,
-    { domain, method, payload }: ApiRequestMessage,
+    requestMessage: ApiRequestMessage,
   ): Promise<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>> {
+    const { domain, method, payload: payloadRaw } = requestMessage;
+    const { transformRequestPayload = p => p, transformResponsePayload = p => p } = this.config;
+
+    const payload = transformRequestPayload(payloadRaw, requestMessage);
+
     const context: ContextData = {
       authToken: conn.getData<string | undefined>('authToken'),
       identity: conn.getData<string | undefined>('identity'),
@@ -104,13 +111,13 @@ class WebSocketApiService {
           for await (const payload of response as AsyncIterableIterator<unknown>) {
             conn.setData('identity', Context.current.identity);
             conn.setData('authToken', Context.current.authToken);
-            yield { payload, stats: 0 };
+            yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
           }
         })();
       } else {
         conn.setData('identity', Context.current.identity);
         conn.setData('authToken', Context.current.authToken);
-        return { payload: response, stats: 0 };
+        return { payload: transformResponsePayload(response, requestMessage), stats: 0 };
       }
     });
   }
