@@ -1,4 +1,5 @@
 import { Anomaly } from '@phnq/message';
+import { get } from 'http';
 
 import { Context, Serializable, Service, WebSocketApiService } from '..';
 import { WebSocketApiClient } from '../browser';
@@ -72,6 +73,15 @@ describe('WebSocketApiService', () => {
 
   it('uses client from service handler', async () => {
     expect(await fruitWsClient.getVeggies()).toStrictEqual(['carrot', 'celery', 'broccoli']);
+  });
+
+  it('responds with a 200 status for ping path', async () => {
+    const statusCode = await new Promise<number | undefined>(resolve => {
+      get('http://localhost:55777', resp => {
+        resolve(resp.statusCode);
+      });
+    });
+    expect(statusCode).toBe(200);
   });
 });
 

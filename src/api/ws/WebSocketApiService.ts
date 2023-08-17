@@ -14,6 +14,8 @@ interface Config extends ServiceConfig {
   authTokenCookie?: string;
   transformResponsePayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
+  path?: string;
+  pingPath?: string;
 }
 
 class WebSocketApiService {
@@ -24,10 +26,23 @@ class WebSocketApiService {
 
   constructor(config: Config) {
     this.config = config;
+
+    const { path = '/', pingPath = path } = config;
+
     this.httpServer = http.createServer();
     this.apiService = new Service(this.config);
     this.wsServer = new WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>({
+      path,
       httpServer: this.httpServer,
+    });
+    this.httpServer.on('request', (req, res) => {
+      if (req.url === pingPath) {
+        res.writeHead(200);
+        res.end();
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
     });
     this.wsServer.onConnect = (conn, req) => this.onConnect(conn, req);
     this.wsServer.onReceive = (conn, message) => this.onReceiveClientMessage(conn, message);
