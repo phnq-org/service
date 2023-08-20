@@ -19,22 +19,24 @@ describe('WebSocketApiService', () => {
     await fruitWsClient.disconnect();
   });
 
-  it('throws if client url port is wrong', async () => {
+  it('throws if client url port is wrong', async done => {
     try {
       await fruitWsClientWrongPort.ping();
       fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(Error);
     }
+    done();
   });
 
-  it('throws if client url path is wrong', async () => {
+  it('throws if client url path is wrong', async done => {
     try {
       await fruitWsClientWrongPath.ping();
       fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(Error);
     }
+    done();
   });
 
   it('does ping from client', async () => {
@@ -53,22 +55,24 @@ describe('WebSocketApiService', () => {
     expect(responses).toStrictEqual(['apple', 'orange', 'pear']);
   });
 
-  it('handles anomalies', async () => {
+  it('handles anomalies', async done => {
     try {
       await fruitWsClient.doErrors('anomaly');
       fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(Anomaly);
     }
+    done();
   });
 
-  it('handles errors', async () => {
+  it('handles errors', async done => {
     try {
       await fruitWsClient.doErrors('error');
       fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(Error);
     }
+    done();
   });
 
   it('uses client from service handler', async () => {

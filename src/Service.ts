@@ -150,29 +150,34 @@ class Service {
               return;
             }
 
-            const response = await this.connection!.request({
-              domain,
-              origin: this.origin,
-              method,
-              payload,
-              contextData: Context.current.data,
-            });
+            if (this.connection) {
+              const response = await this.connection.request({
+                domain,
+                origin: this.origin,
+                method,
+                payload,
+                contextData: Context.current.data,
+              });
 
-            if (
-              typeof response === 'object' &&
-              (response as AsyncIterableIterator<ServiceResponseMessage>)[Symbol.asyncIterator]
-            ) {
-              const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
-              return (async function* () {
-                for await (const { payload, sharedContextData } of responseIter) {
-                  Context.current.merge(sharedContextData);
-                  yield payload;
-                }
-              })();
+              if (
+                typeof response === 'object' &&
+                (response as AsyncIterableIterator<ServiceResponseMessage>)[Symbol.asyncIterator]
+              ) {
+                const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
+                return (async function* () {
+                  for await (const { payload, sharedContextData } of responseIter) {
+                    Context.current.merge(sharedContextData);
+                    yield payload;
+                  }
+                })();
+              } else {
+                const { payload, sharedContextData } = response as ServiceResponseMessage;
+                Context.current.merge(sharedContextData);
+                return payload;
+              }
             } else {
-              const { payload, sharedContextData } = response as ServiceResponseMessage;
-              Context.current.merge(sharedContextData);
-              return payload;
+              // This should never happen.
+              this.log.error('No connection');
             }
           };
         },
