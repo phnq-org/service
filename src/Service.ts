@@ -20,7 +20,7 @@ export interface ServiceConfig {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceHandler = (requestPayload: any, service: Service) => Promise<unknown | AsyncIterableIterator<unknown>>;
+type ServiceHandler = (requestPayload: any, service: Service) => Promise<unknown> | AsyncIterableIterator<unknown>;
 
 class Service {
   private log: Logger;

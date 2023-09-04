@@ -10,6 +10,7 @@ describe('WebSocketApiService', () => {
     await fruitService.connect();
     await vegService.connect();
     await apiService.start();
+    await fruitWsClientWrongPort.connect();
   });
 
   afterAll(async () => {
@@ -17,14 +18,19 @@ describe('WebSocketApiService', () => {
     await vegService.disconnect();
     await apiService.stop();
     await fruitWsClient.disconnect();
+    await fruitWsClientWrongPort.disconnect();
   });
 
   it('throws if client url port is wrong', async done => {
+    let theErr: unknown;
     try {
-      await fruitWsClientWrongPort.ping();
+      const resp = await fruitWsClientWrongPort.ping();
+      expect(resp).not.toBe('pong');
       fail('should have thrown');
     } catch (err) {
-      expect(err).toBeInstanceOf(Error);
+      theErr = err;
+    } finally {
+      expect(theErr).toBeInstanceOf(Error);
     }
     done();
   });

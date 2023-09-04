@@ -178,7 +178,7 @@ const vegService = new Service({
 
 interface FruitApi {
   getKinds(): Promise<string[]>;
-  getKindsIterator(): Promise<AsyncIterableIterator<string>>;
+  getKindsIterator(): AsyncIterableIterator<string>;
   doErrors(type: 'error' | 'anomaly' | 'none'): Promise<void>;
   getFromContext(key: string): Promise<Serializable | undefined>;
   getVeggies(): Promise<string[]>;
@@ -186,7 +186,7 @@ interface FruitApi {
 
 const getKinds: FruitApi['getKinds'] = async () => ['apple', 'orange', 'pear'];
 
-const getKindsIterator: FruitApi['getKindsIterator'] = async () =>
+const getKindsIterator: FruitApi['getKindsIterator'] = () =>
   (async function* () {
     yield 'apple';
     yield 'orange';
