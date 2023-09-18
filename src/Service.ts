@@ -13,11 +13,11 @@ const CHECK_IN_INTERVAL = 10 * 1000;
 const PEER_PRUNE_THRESHOLD = 30 * 1000;
 
 interface AllServicesClient {
-  checkIn(info: { id: string; domain: string }): void;
+  checkIn(info: { origin: string; domain: string }): void;
 }
 
 export interface PeerServiceInstance {
-  id: string;
+  origin: string;
   domain: string;
   lastCheckIn: number;
 }
@@ -36,12 +36,12 @@ export interface ServiceConfig {
 type ServiceHandler = (requestPayload: any, service: Service) => Promise<unknown | AsyncIterableIterator<unknown>>;
 
 class Service {
+  public readonly origin = uuid().replace(/[^\w]/g, '');
   private log: Logger;
   private config: ServiceConfig;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
   private connection?: MessageConnection<ServiceRequestMessage, ServiceResponseMessage>;
   private readonly handlers: { [key: string]: ServiceHandler };
-  private readonly origin = uuid().replace(/[^\w]/g, '');
   private connected = false;
   private allServicesClient = this.getClient<AllServicesClient>('all-services');
   private peerServiceInstances: PeerServiceInstance[] = [];
@@ -56,11 +56,11 @@ class Service {
       ping: async () => 'pong',
       checkIn: ({ id, domain }: { id: string; domain: string }) => {
         if (id !== this.origin) {
-          const instance = this.peerServiceInstances.find(i => i.id === id);
+          const instance = this.peerServiceInstances.find(i => i.origin === id);
           if (instance) {
             instance.lastCheckIn = Date.now();
           } else {
-            this.peerServiceInstances.push({ id, domain, lastCheckIn: Date.now() });
+            this.peerServiceInstances.push({ origin: id, domain, lastCheckIn: Date.now() });
           }
         }
         return Promise.resolve();
@@ -109,13 +109,13 @@ class Service {
 
     if (domain) {
       setTimeout(() => {
-        this.allServicesClient.checkIn({ id: this.origin, domain });
+        this.allServicesClient.checkIn({ origin: this.origin, domain });
         this.checkInPid = setInterval(() => {
-          this.allServicesClient.checkIn({ id: this.origin, domain });
+          this.allServicesClient.checkIn({ origin: this.origin, domain });
           const now = Date.now();
           this.peerServiceInstances = this.peerServiceInstances.filter(instance => {
             if (now - instance.lastCheckIn > PEER_PRUNE_THRESHOLD) {
-              this.log('Pruning peer service instance: %s (%s)', instance.id, instance.domain);
+              this.log('Pruning peer service instance: %s (%s)', instance.origin, instance.domain);
               return false;
             }
             return true;
