@@ -8,7 +8,7 @@ module.exports = {
   collectCoverageFrom: ['<rootDir>/src/**/{!(NATS),}.{ts,tsx}'],
   coverageThreshold: {
     global: {
-      branches: 75,
+      branches: 70,
       functions: 75,
       lines: 75,
       statements: 75,

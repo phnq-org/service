@@ -9,8 +9,8 @@ import Context from './Context';
 import { DefaultClient } from './ServiceClient';
 import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
 
-const CHECK_IN_INTERVAL = 30 * 1000;
-const PEER_PRUNE_THRESHOLD = 2 * 60 * 1000;
+const CHECK_IN_INTERVAL = 10 * 1000;
+const PEER_PRUNE_THRESHOLD = 30 * 1000;
 
 interface AllServicesClient {
   checkIn(info: { id: string; domain: string }): void;
@@ -108,8 +108,8 @@ class Service {
     });
 
     if (domain) {
-      this.allServicesClient.checkIn({ id: this.origin, domain });
       setTimeout(() => {
+        this.allServicesClient.checkIn({ id: this.origin, domain });
         this.checkInPid = setInterval(() => {
           this.allServicesClient.checkIn({ id: this.origin, domain });
           const now = Date.now();
