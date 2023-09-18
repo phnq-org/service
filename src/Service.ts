@@ -9,6 +9,19 @@ import Context from './Context';
 import { DefaultClient } from './ServiceClient';
 import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
 
+const CHECK_IN_INTERVAL = 30 * 1000;
+const PEER_PRUNE_THRESHOLD = 2 * 60 * 1000;
+
+interface AllServicesClient {
+  checkIn(info: { id: string; domain: string }): void;
+}
+
+interface PeerServiceInstance {
+  id: string;
+  domain: string;
+  lastCheckIn: number;
+}
+
 export interface ServiceConfig {
   /** Provides a way to address this service. A service with no domain is a client only. */
   domain?: string;
@@ -30,16 +43,37 @@ class Service {
   private readonly handlers: { [key: string]: ServiceHandler };
   private readonly origin = uuid().replace(/[^\w]/g, '');
   private connected = false;
+  private allServicesClient = this.getClient<AllServicesClient>('all-services');
+  private peerServiceInstances: PeerServiceInstance[] = [];
+  private checkInPid?: NodeJS.Timer;
 
   public constructor(config: ServiceConfig) {
     this.log = createLogger(config.domain || 'client');
     this.config = config;
     this.transport = DEFAULT_TRANSPORT;
-    this.handlers = Object.freeze({ ...config.handlers, ping: async () => 'pong' });
+    this.handlers = Object.freeze({
+      ...config.handlers,
+      ping: async () => 'pong',
+      checkIn: ({ id, domain }: { id: string; domain: string }) => {
+        if (id !== this.origin) {
+          const instance = this.peerServiceInstances.find(i => i.id === id);
+          if (instance) {
+            instance.lastCheckIn = Date.now();
+          } else {
+            this.peerServiceInstances.push({ id, domain, lastCheckIn: Date.now() });
+          }
+        }
+        return Promise.resolve();
+      },
+    });
   }
 
   public get isConnected(): boolean {
     return this.connected;
+  }
+
+  public get peerServices(): PeerServiceInstance[] {
+    return this.peerServiceInstances;
   }
 
   public async connect(): Promise<void> {
@@ -52,7 +86,7 @@ class Service {
     this.log('Starting service...');
 
     this.transport = await NATSTransport.create(nats, {
-      subscriptions: [domain, this.origin].filter(Boolean) as string[],
+      subscriptions: [this.origin, domain, domain && 'all-services'].filter(Boolean) as string[],
       publishSubject: ({ t, p }) => {
         switch (t) {
           case MessageType.Request:
@@ -73,6 +107,23 @@ class Service {
       unmarshalPayload: p => this.unmarshalPayload(p),
     });
 
+    if (domain) {
+      this.allServicesClient.checkIn({ id: this.origin, domain });
+      setTimeout(() => {
+        this.checkInPid = setInterval(() => {
+          this.allServicesClient.checkIn({ id: this.origin, domain });
+          const now = Date.now();
+          this.peerServiceInstances = this.peerServiceInstances.filter(instance => {
+            if (now - instance.lastCheckIn > PEER_PRUNE_THRESHOLD) {
+              this.log('Pruning peer service instance: %s (%s)', instance.id, instance.domain);
+              return false;
+            }
+            return true;
+          });
+        }, CHECK_IN_INTERVAL);
+      }, Math.round(Math.random() * CHECK_IN_INTERVAL));
+    }
+
     if (responseTimeout !== undefined) {
       this.connection.responseTimeout = responseTimeout;
     }
@@ -86,6 +137,10 @@ class Service {
 
   public async disconnect(): Promise<void> {
     if (this.connected) {
+      if (this.checkInPid) {
+        clearInterval(this.checkInPid);
+      }
+
       await this.transport.close();
       this.connected = false;
     }
@@ -151,13 +206,16 @@ class Service {
             }
 
             if (this.connection) {
-              const response = await this.connection.request({
-                domain,
-                origin: this.origin,
-                method,
-                payload,
-                contextData: Context.current.data,
-              });
+              const response = await this.connection.request(
+                {
+                  domain,
+                  origin: this.origin,
+                  method,
+                  payload,
+                  contextData: Context.current.data,
+                },
+                method !== 'checkIn',
+              );
 
               if (
                 typeof response === 'object' &&
@@ -170,7 +228,7 @@ class Service {
                     yield payload;
                   }
                 })();
-              } else {
+              } else if (response) {
                 const { payload, sharedContextData } = response as ServiceResponseMessage;
                 Context.current.merge(sharedContextData);
                 return payload;
