@@ -16,7 +16,7 @@ interface AllServicesClient {
   checkIn(info: { id: string; domain: string }): void;
 }
 
-interface PeerServiceInstance {
+export interface PeerServiceInstance {
   id: string;
   domain: string;
   lastCheckIn: number;
