@@ -16,7 +16,7 @@ interface AllServicesClient {
   checkIn(info: { origin: string; domain: string }): void;
 }
 
-export interface PeerServiceInstance {
+export interface ServiceInstanceInfo {
   origin: string;
   domain: string;
   lastCheckIn: number;
@@ -44,7 +44,7 @@ class Service {
   private readonly handlers: { [key: string]: ServiceHandler };
   private connected = false;
   private allServicesClient = this.getClient<AllServicesClient>('all-services');
-  private peerServiceInstances: PeerServiceInstance[] = [];
+  private readonly peerServiceInstanceInfos: ServiceInstanceInfo[] = [];
   private checkInPid?: NodeJS.Timer;
 
   public constructor(config: ServiceConfig) {
@@ -54,26 +54,33 @@ class Service {
     this.handlers = Object.freeze({
       ...config.handlers,
       ping: async () => 'pong',
-      checkIn: ({ id, domain }: { id: string; domain: string }) => {
-        if (id !== this.origin) {
-          const instance = this.peerServiceInstances.find(i => i.origin === id);
+      checkIn: ({ origin, domain }: Parameters<AllServicesClient['checkIn']>[0]) => {
+        if (origin !== this.origin) {
+          const instance = this.peerServiceInstanceInfos.find(i => i.origin === origin);
           if (instance) {
             instance.lastCheckIn = Date.now();
           } else {
-            this.peerServiceInstances.push({ origin: id, domain, lastCheckIn: Date.now() });
+            this.peerServiceInstanceInfos.push({ origin, domain, lastCheckIn: Date.now() });
           }
         }
         return Promise.resolve();
       },
     });
+    if (config.domain) {
+      this.peerServiceInstanceInfos.push({ origin: this.origin, domain: config.domain, lastCheckIn: 0 });
+    }
   }
 
   public get isConnected(): boolean {
     return this.connected;
   }
 
-  public get peerServices(): PeerServiceInstance[] {
-    return this.peerServiceInstances;
+  /**
+   * Returns a list of peer service instances that have checked in within the last 30 seconds.
+   * A peer service instance is a service instance that is using the same NATS server.
+   */
+  public get peerServiceInfos(): ServiceInstanceInfo[] {
+    return this.peerServiceInstanceInfos;
   }
 
   public async connect(): Promise<void> {
@@ -113,13 +120,14 @@ class Service {
         this.checkInPid = setInterval(() => {
           this.allServicesClient.checkIn({ origin: this.origin, domain });
           const now = Date.now();
-          this.peerServiceInstances = this.peerServiceInstances.filter(instance => {
-            if (now - instance.lastCheckIn > PEER_PRUNE_THRESHOLD) {
+          let i = this.peerServiceInstanceInfos.length;
+          while (i--) {
+            const instance = this.peerServiceInstanceInfos[i];
+            if (instance.origin !== this.origin && now - instance.lastCheckIn > PEER_PRUNE_THRESHOLD) {
               this.log('Pruning peer service instance: %s (%s)', instance.origin, instance.domain);
-              return false;
+              this.peerServiceInstanceInfos.splice(i, 1);
             }
-            return true;
-          });
+          }
         }, CHECK_IN_INTERVAL);
       }, Math.round(Math.random() * CHECK_IN_INTERVAL));
     }
