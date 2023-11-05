@@ -21,7 +21,7 @@ export interface ContextData {
 }
 
 class Context {
-  static apply<T = unknown>(data: ContextData, fn: () => Promise<T>): Promise<T> {
+  static apply<T>(data: ContextData, fn: () => Promise<T>): Promise<T> {
     return new Promise<T>(resolve => {
       contextLocalStorage.run(Context.current.merge(data), () => resolve(fn()));
     });
@@ -37,11 +37,14 @@ class Context {
 
   private contextData: ContextData;
   private sharedContextData: ContextData;
-  public getClient?: <T = unknown>(domain: string) => T & DefaultClient;
 
   private constructor(contextData: ContextData) {
     this.contextData = contextData;
     this.sharedContextData = {};
+  }
+
+  public getClient<T>(domain: string): T & DefaultClient {
+    throw new Error(`No client for domain ${domain}`);
   }
 
   public set(key: string, val: Serializable, share = false): void {

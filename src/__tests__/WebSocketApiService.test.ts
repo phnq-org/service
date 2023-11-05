@@ -21,7 +21,7 @@ describe('WebSocketApiService', () => {
     await fruitWsClientWrongPort.disconnect();
   });
 
-  it('throws if client url port is wrong', async done => {
+  it('throws if client url port is wrong', async () => {
     let theErr: unknown;
     try {
       const resp = await fruitWsClientWrongPort.ping();
@@ -32,17 +32,15 @@ describe('WebSocketApiService', () => {
     } finally {
       expect(theErr).toBeInstanceOf(Error);
     }
-    done();
   });
 
-  it('throws if client url path is wrong', async done => {
+  it('throws if client url path is wrong', async () => {
     try {
       await fruitWsClientWrongPath.ping();
       fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(Error);
     }
-    done();
   });
 
   it('does ping from client', async () => {
@@ -61,24 +59,22 @@ describe('WebSocketApiService', () => {
     expect(responses).toStrictEqual(['apple', 'orange', 'pear']);
   });
 
-  it('handles anomalies', async done => {
+  it('handles anomalies', async () => {
     try {
       await fruitWsClient.doErrors('anomaly');
       fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(Anomaly);
     }
-    done();
   });
 
-  it('handles errors', async done => {
+  it('handles errors', async () => {
     try {
       await fruitWsClient.doErrors('error');
       fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(Error);
     }
-    done();
   });
 
   it('uses client from service handler', async () => {
@@ -169,12 +165,9 @@ const getMyData = (): string | undefined => {
 };
 
 const getVeggies: FruitApi['getVeggies'] = async () => {
-  if (Context.current.getClient) {
-    Context.current.set('bubba', 'gump');
-    const vegClient = Context.current.getClient<VegApi>('vegWs');
-    return await vegClient.getKinds();
-  }
-  throw new Error('getClient not defined');
+  Context.current.set('bubba', 'gump');
+  const vegClient = Context.current.getClient<VegApi>('vegWs');
+  return await vegClient.getKinds();
 };
 
 const fruitService = new Service({

@@ -219,12 +219,9 @@ const getMyData = (): string | undefined => {
 };
 
 const getVeggies: FruitApi['getVeggies'] = async () => {
-  if (Context.current.getClient) {
-    Context.current.set('bubba', 'gump');
-    const vegClient = Context.current.getClient<VegApi>('veg');
-    return await vegClient.getKinds();
-  }
-  throw new Error('getClient not defined');
+  Context.current.set('bubba', 'gump');
+  const vegClient = Context.current.getClient<VegApi>('veg');
+  return await vegClient.getKinds();
 };
 
 const fruitService = new Service({
