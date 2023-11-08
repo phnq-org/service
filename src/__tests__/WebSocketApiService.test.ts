@@ -97,7 +97,6 @@ const apiService = new WebSocketApiService({
   port: 55777,
   signSalt: 'abcd1234',
   nats: { servers: [NATS_URI] },
-  authTokenCookie: 't',
 });
 
 const fruitWsClient = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777');

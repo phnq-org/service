@@ -16,7 +16,6 @@ export type Serializable =
 export interface ContextData {
   [key: string]: Serializable;
   identity?: string;
-  authToken?: string;
   langs?: string[];
 }
 
@@ -69,14 +68,6 @@ class Context {
 
   public get sharedData(): ContextData {
     return this.sharedContextData;
-  }
-
-  public get authToken(): string | undefined {
-    return this.contextData.authToken;
-  }
-
-  public set authToken(authToken: string | undefined) {
-    this.set('authToken', authToken, true);
   }
 
   public get identity(): string | undefined {

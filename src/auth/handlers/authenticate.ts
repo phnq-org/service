@@ -1,32 +1,19 @@
 import Context from '../../Context';
-import AuthApi, { AuthError, AuthErrorInfo } from '../AuthApi';
-import { Session } from '../AuthPersistence';
+import AuthApi from '../AuthApi';
 import AuthService from '../AuthService';
 
-const authenticate: AuthApi['authenticate'] = async (
-  { token = Context.current.authToken } = {},
-  service?: AuthService,
-) => {
-  if (token) {
-    const persistence = service!.persistence;
-
-    const session = await persistence.findSession({ token });
-    if (session && isSessionValid(session)) {
-      const account = await persistence.findAccount({ address: session.accountAddress });
-      if (account) {
-        Context.current.identity = account.address;
-        Context.current.authToken = token;
-        return { accountStatus: account.status };
-      } else {
-        throw new AuthError(AuthErrorInfo.NotAuthenticated);
-      }
+const authenticate: AuthApi['authenticate'] = async (authReq, service?: AuthService) => {
+  if (service?.onAuthenticate) {
+    try {
+      const { identity } = await service.onAuthenticate(authReq);
+      Context.current.identity = identity;
+      return { authenticated: true, identity };
+    } catch (err) {
+      Context.current.identity = undefined;
+      return { authenticated: false, error: (err as Error).message || String(err) };
     }
-    Context.current.identity = undefined;
-    Context.current.authToken = undefined;
   }
-  throw new AuthError(AuthErrorInfo.NotAuthenticated);
+  throw new Error('No onAuthenticate handler configured.');
 };
-
-const isSessionValid = (session: Session): boolean => session.active && session.expiry.getTime() > Date.now();
 
 export default authenticate;
