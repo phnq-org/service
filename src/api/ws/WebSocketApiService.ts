@@ -11,7 +11,6 @@ const log = createLogger('WebSocketApiService');
 
 interface Config extends ServiceConfig {
   port: number;
-  authTokenCookie?: string;
   transformResponsePayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   path?: string;
@@ -88,16 +87,17 @@ class WebSocketApiService {
     log('Stopped.');
   }
 
+  /**
+   * This is where WebSocket connections are established. Both the initial
+   * HTTP request and the underlying MessageConnection abstraction are available
+   * here as parameters. It is a convenient place to harvest headers from the
+   * HTTP request for the purpose of storing connection-persisnet data.
+   */
   private async onConnect(
     conn: MessageConnection<ApiRequestMessage, ApiResponseMessage>,
     req: http.IncomingMessage,
   ): Promise<void> {
     conn.setData('langs', getLangs(req));
-
-    const authToken = getAuthToken(req, this.config.authTokenCookie);
-    if (authToken) {
-      conn.setData('authToken', authToken);
-    }
   }
 
   private async onReceiveClientMessage(
@@ -110,7 +110,6 @@ class WebSocketApiService {
     const payload = transformRequestPayload(payloadRaw, requestMessage);
 
     const context: ContextData = {
-      authToken: conn.getData<string | undefined>('authToken'),
       identity: conn.getData<string | undefined>('identity'),
       langs: conn.getData<string[]>('langs'),
     };
@@ -125,13 +124,11 @@ class WebSocketApiService {
         return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
           for await (const payload of response as AsyncIterableIterator<unknown>) {
             conn.setData('identity', Context.current.identity);
-            conn.setData('authToken', Context.current.authToken);
             yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
           }
         })();
       } else {
         conn.setData('identity', Context.current.identity);
-        conn.setData('authToken', Context.current.authToken);
         return { payload: transformResponsePayload(response, requestMessage), stats: 0 };
       }
     });
@@ -147,12 +144,3 @@ const getLangs = (req: http.IncomingMessage): string[] => {
   }
   return ['en'];
 };
-
-const getAuthToken = (req: http.IncomingMessage, cookieName?: string): string | undefined =>
-  cookieName ? getParsedCookie(req.headers.cookie)[cookieName] : undefined;
-
-const getParsedCookie = (cookie = ''): { [key: string]: string } =>
-  cookie
-    .split(/\s*;\s*/)
-    .map(c => c.split('='))
-    .reduce((o, t) => ({ ...o, [t[0]]: decodeURIComponent(t[1]) }), {});

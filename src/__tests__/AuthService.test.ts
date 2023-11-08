@@ -1,12 +1,6 @@
-import { Anomaly } from '@phnq/message';
-
 import { AuthApi, AuthService, ServiceClient, WebSocketApiService } from '..';
-import { AuthErrorInfo } from '../auth/AuthApi';
-import { InMemoryAuthPersistence } from '../auth/AuthPersistence';
 import { WebSocketApiClient } from '../browser';
 import { NATS_URI } from './etc/testenv';
-
-const persistence = new InMemoryAuthPersistence();
 
 describe('AuthService', () => {
   beforeAll(async () => {
@@ -23,151 +17,30 @@ describe('AuthService', () => {
     await authWsClient.disconnect();
   });
 
-  beforeEach(() => {
-    persistence.reset();
-  });
-
   test('ping', async () => {
     expect(await authClient.ping()).toBe('pong');
   });
 
-  describe('identification', () => {
-    test('identify by email address', async () => {
-      const { identified } = await authClient.identify({ address: 'bubba@gump.com' });
-      expect(identified).toBe(true);
-    });
-
-    test('should reject invalid email address', async () => {
-      let allowedInvalidEmail: boolean;
-      try {
-        await authClient.identify({ address: 'bambam' });
-        allowedInvalidEmail = true;
-      } catch (err) {
-        expect(err).toBeInstanceOf(Anomaly);
-        expect((err as Anomaly).info).toBe(AuthErrorInfo.InvalidAddress);
-        allowedInvalidEmail = false;
-      }
-      expect(allowedInvalidEmail).toBe(false);
-    });
-
-    test('identify by phone number', async () => {
-      await authClient.identify({ address: '4165551234' });
-    });
-  });
-
-  describe('session creation', () => {
-    test('create a session for a no-password account and authenticate it', async () => {
-      await authClient.identify({ address: 'bubba@gump.com' });
-
-      const { accountStatus, token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
-      expect(accountStatus.state).toBe('active');
-      expect(token).not.toBeUndefined();
-
-      try {
-        await authClient.authenticate({ token });
-      } catch (err) {
-        fail(err);
-      }
-
-      try {
-        await authClient.authenticate();
-        fail('should have thrown');
-      } catch (err) {
-        expect(err).toBeInstanceOf(Anomaly);
-        expect((err as Anomaly).info).toBe(AuthErrorInfo.NotAuthenticated);
-      }
-
-      await authClient.destroySession({ token });
-
-      const token2 = (await authClient.createSession({ code: 'CODE:bubba@gump.com' })).token;
-
-      let authenticated: boolean;
-      try {
-        await authClient.authenticate({ token: token2 });
-        authenticated = true;
-      } catch (err) {
-        authenticated = false;
-      }
-      expect(authenticated).toBe(true);
-    });
-  });
-
-  describe('session destruction', () => {
-    test('destroy session, token should be rejected', async () => {
-      await authClient.identify({ address: 'bubba@gump.com' });
-
-      const { token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
-      await authClient.authenticate({ token });
-      await authClient.destroySession({ token });
-
-      let authenticated: boolean;
-      try {
-        await authClient.authenticate({ token });
-        authenticated = true;
-      } catch (err) {
-        authenticated = false;
-      }
-      expect(authenticated).toBe(false);
-    });
-  });
-
-  describe('set password', () => {
-    test('set password, create a session with email/password', async () => {
-      await authClient.identify({ address: 'bubba@gump.com' });
-
-      const { token } = await authClient.createSession({ code: 'CODE:bubba@gump.com' });
-      await authClient.setPassword({ token, password: 'cheese' });
-      await authClient.destroySession({ token });
-
-      const { token: token2 } = await authClient.createSession({ address: 'bubba@gump.com', password: 'cheese' });
-      expect(token2).not.toBeUndefined();
-
-      let authenticated: boolean;
-      try {
-        await authClient.authenticate({ token: token2 });
-        authenticated = true;
-      } catch (err) {
-        authenticated = false;
-      }
-      expect(authenticated).toBe(true);
-
-      await authClient.setPassword({ token, password: 'cheddar' });
-      await authClient.destroySession({ token });
-
-      // Old password should no longer work.
-      let sessionCreated: boolean;
-      try {
-        await authClient.createSession({ address: 'bubba@gump.com', password: 'cheese' });
-        sessionCreated = true;
-      } catch (err) {
-        expect(err).toBeInstanceOf(Anomaly);
-        expect((err as Anomaly).info).toBe(AuthErrorInfo.NotAuthenticated);
-        sessionCreated = false;
-      }
-      expect(sessionCreated).toBe(false);
-    });
-  });
-
   describe('WebSocket Auth', () => {
-    test('Identify, create session, authenticate, destroy session', async () => {
-      await authWsClient.identify({ address: 'bubba@gump.com' });
-
-      await authWsClient.createSession({ code: 'CODE:bubba@gump.com' });
-
+    test('Auth success', async () => {
       try {
-        await authWsClient.authenticate();
+        const { identity, authenticated, error } = await authWsClient.authenticate('good-token');
+        expect(identity).toBe('The User');
+        expect(authenticated).toBe(true);
+        expect(error).toBeUndefined();
       } catch (err) {
         fail(err);
       }
+    });
 
-      await authWsClient.destroySession();
-
+    test('Auth fail', async () => {
       try {
-        await authWsClient.authenticate();
-        fail('should have thrown');
+        const { identity, authenticated, error } = await authWsClient.authenticate('bad-token');
+        expect(identity).toBeUndefined();
+        expect(authenticated).toBe(false);
+        expect(error).toBe('not authenticated');
       } catch (err) {
-        expect(err).toBeInstanceOf(Anomaly);
-        expect((err as Anomaly).info).toBe(AuthErrorInfo.NotAuthenticated);
+        fail(err);
       }
     });
   });
@@ -179,11 +52,12 @@ const authService = new AuthService({
   signSalt: 'abcd1234',
   domain: 'auth',
   nats: { servers: [NATS_URI] },
-  authCodeUrl(code) {
-    return `http://test.com/code/${code}`;
+  onAuthenticate: async (req: string) => {
+    if (req === 'good-token') {
+      return { identity: 'The User' };
+    }
+    throw new Error('not authenticated');
   },
-  addressAsCode: true,
-  persistence,
 });
 
 const authClient = ServiceClient.create<AuthApi>('auth', {
@@ -195,7 +69,6 @@ const apiService = new WebSocketApiService({
   port: 55778,
   signSalt: 'abcd1234',
   nats: { servers: [NATS_URI] },
-  authTokenCookie: 't',
 });
 
 const authWsClient = WebSocketApiClient.create<AuthApi>('auth', 'ws://localhost:55778');

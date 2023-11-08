@@ -264,7 +264,7 @@ class Service {
       return new Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>>((resolve, reject) => {
         Context.apply(contextData, async () => {
           try {
-            Context.current.getClient = <T = unknown>(domain: string): T & DefaultClient => this.getClient(domain);
+            Context.current.getClient = <T>(domain: string): T & DefaultClient => this.getClient(domain);
             const response = await handler(payload, this);
             if (
               typeof response === 'object' &&
