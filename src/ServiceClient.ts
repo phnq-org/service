@@ -1,7 +1,8 @@
-import Service, { ServiceConfig } from './Service';
+import Service, { ServiceConfig, ServiceInstanceInfo } from './Service';
 
 export interface DefaultClient {
   ping(): Promise<string>;
+  rollCall(): Promise<ServiceInstanceInfo[]>;
   isConnected: boolean;
 }
 
