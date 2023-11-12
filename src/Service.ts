@@ -11,9 +11,11 @@ import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from '.
 
 const CHECK_IN_INTERVAL = 10 * 1000;
 const PEER_PRUNE_THRESHOLD = 30 * 1000;
+const ALL_SERVICES_DOMAIN = 'all-services';
 
-interface AllServicesClient {
+interface AllServices {
   checkIn(info: { origin: string; domain: string }): void;
+  requestCheckIn(): Promise<void>;
 }
 
 export interface ServiceInstanceInfo {
@@ -41,9 +43,9 @@ class Service {
   private config: ServiceConfig;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
   private connection?: MessageConnection<ServiceRequestMessage, ServiceResponseMessage>;
-  private readonly handlers: { [key: string]: ServiceHandler };
+  private readonly handlers: AllServices & { [key: string]: ServiceHandler };
   private connected = false;
-  private allServicesClient = this.getClient<AllServicesClient>('all-services');
+  private allServicesClient = this.getClient<AllServices>(ALL_SERVICES_DOMAIN);
   private readonly peerServiceInstanceInfos: ServiceInstanceInfo[] = [];
   private checkInPid?: NodeJS.Timer;
 
@@ -54,7 +56,7 @@ class Service {
     this.handlers = Object.freeze({
       ...config.handlers,
       ping: async () => 'pong',
-      checkIn: ({ origin, domain }: Parameters<AllServicesClient['checkIn']>[0]) => {
+      checkIn: ({ origin, domain }) => {
         if (origin !== this.origin) {
           const instance = this.peerServiceInstanceInfos.find(i => i.origin === origin);
           if (instance) {
@@ -62,6 +64,12 @@ class Service {
           } else {
             this.peerServiceInstanceInfos.push({ origin, domain, lastCheckIn: Date.now() });
           }
+        }
+        return Promise.resolve();
+      },
+      requestCheckIn: () => {
+        if (config.domain) {
+          this.allServicesClient.checkIn({ origin: this.origin, domain: config.domain });
         }
         return Promise.resolve();
       },
@@ -90,10 +98,30 @@ class Service {
       return;
     }
 
+    this.connected = true;
+
     this.log('Starting service...');
 
+    /**
+     * Create a NATS transport.
+     * This configiration deterimines how messages are routed.
+     */
     this.transport = await NATSTransport.create(nats, {
-      subscriptions: [this.origin, domain, domain && 'all-services'].filter(Boolean) as string[],
+      /**
+       * This service listens for incoming messages on the following subjects:
+       * - `origin` (uuid) messages sent directly to this service instance.
+       * - `domain` (string) messages sent to this service's domain.
+       * - `all-services` messages sent to all services.
+       */
+      subscriptions: [this.origin, domain, ALL_SERVICES_DOMAIN].filter(Boolean) as string[],
+      /**
+       * Outgoing messages are published to subjects as follows:
+       * - A `request` message is published to the `domain` subject.
+       * - Errors/Anomalies are published to the `origin` subject.
+       * - A `response` message is published to the `origin` subject.
+       *
+       * Note: `origin` refers to the originator of the message conversation.
+       */
       publishSubject: ({ t, p }) => {
         switch (t) {
           case MessageType.Request:
@@ -115,8 +143,13 @@ class Service {
     });
 
     if (domain) {
+      this.allServicesClient.checkIn({ origin: this.origin, domain });
+      /**
+       * After the immediate checkin above, start periodic checkins, but only after a random
+       * delay of up to `CHECK_IN_INTERVAL`. This is to avoid all services checking in at
+       * the same time.
+       */
       setTimeout(() => {
-        this.allServicesClient.checkIn({ origin: this.origin, domain });
         this.checkInPid = setInterval(() => {
           this.allServicesClient.checkIn({ origin: this.origin, domain });
           const now = Date.now();
@@ -136,21 +169,16 @@ class Service {
       this.connection.responseTimeout = responseTimeout;
     }
 
-    if (domain) {
-      this.connection.onReceive = message => this.handleRequest(message);
-    }
-
-    this.connected = true;
+    this.connection.onReceive = message => this.handleRequest(message);
   }
 
   public async disconnect(): Promise<void> {
     if (this.connected) {
+      this.connected = false;
       if (this.checkInPid) {
         clearInterval(this.checkInPid);
       }
-
       await this.transport.close();
-      this.connected = false;
     }
   }
 
@@ -192,6 +220,28 @@ class Service {
    * @returns
    */
   public getClient<T = unknown>(domain: string): T & DefaultClient {
+    let lastServiceOrigin: string;
+
+    /**
+     * Looks up the service origin(s) for the client's domain and returns the next one
+     * based on a round-robin algorithm.
+     */
+    const getServiceOrigin = async (): Promise<string> => {
+      let serviceOrigins = this.peerServiceInstanceInfos.filter(i => i.domain === domain).map(i => i.origin);
+      if (serviceOrigins.length === 0) {
+        this.log('Cannot find service instance for domain `%s`. Roll call.', domain);
+        await this.allServicesClient.requestCheckIn();
+        await sleep(500);
+        serviceOrigins = this.peerServiceInstanceInfos.filter(i => i.domain === domain).map(i => i.origin);
+      }
+      if (serviceOrigins.length === 0) {
+        throw new Error(`No service instances found for domain: ${domain}`);
+      }
+      const serviceOriginIndex = (serviceOrigins.indexOf(lastServiceOrigin) + 1) % serviceOrigins.length;
+      lastServiceOrigin = serviceOrigins[serviceOriginIndex];
+      return lastServiceOrigin;
+    };
+
     return new Proxy(
       {},
       {
@@ -214,9 +264,15 @@ class Service {
             }
 
             if (this.connection) {
+              if (method === 'rollCall') {
+                await this.allServicesClient.requestCheckIn();
+                await sleep(500);
+                return this.peerServiceInstanceInfos;
+              }
+
               const response = await this.connection.request(
                 {
-                  domain,
+                  domain: domain === ALL_SERVICES_DOMAIN ? domain : await getServiceOrigin(),
                   origin: this.origin,
                   method,
                   payload,
@@ -314,5 +370,7 @@ const DEFAULT_TRANSPORT = {
     // do nothing
   },
 };
+
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 export default Service;
