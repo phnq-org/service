@@ -1,7 +1,8 @@
 import Service, { ServiceConfig } from '../Service';
+import AuthApi from './AuthApi';
 import authenticate from './handlers/authenticate';
 
-interface AuthServiceConfig extends Omit<ServiceConfig, 'handlers'> {
+interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, 'handlers'> {
   /**
    * Setting this callback will enable authentication by delegating responsibility
    * to the application. The `authReq` argument is the payload of the `authenticate`
@@ -21,7 +22,7 @@ interface AuthServiceConfig extends Omit<ServiceConfig, 'handlers'> {
   onAuthenticate?(authReq: unknown): Promise<{ identity: string }>;
 }
 
-class AuthService extends Service {
+class AuthService extends Service<AuthApi> {
   public readonly onAuthenticate: AuthServiceConfig['onAuthenticate'];
 
   public constructor(config: AuthServiceConfig) {

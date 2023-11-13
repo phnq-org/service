@@ -4,12 +4,12 @@ import { WebSocketMessageServer } from '@phnq/message/WebSocketMessageServer';
 import http from 'http';
 
 import Context, { ContextData } from '../../Context';
-import Service, { ServiceConfig } from '../../Service';
+import Service, { ServiceApi, ServiceConfig } from '../../Service';
 import { ApiRequestMessage, ApiResponseMessage } from '../ApiMessage';
 
 const log = createLogger('WebSocketApiService');
 
-interface Config extends ServiceConfig {
+interface Config<T extends ServiceApi<T>> extends ServiceConfig<T> {
   port: number;
   transformResponsePayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
@@ -17,13 +17,13 @@ interface Config extends ServiceConfig {
   pingPath?: string;
 }
 
-class WebSocketApiService {
-  private config: Config;
+class WebSocketApiService<T extends ServiceApi<T>> {
+  private config: Config<T>;
   private httpServer: http.Server;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>;
-  private apiService: Service;
+  private apiService: Service<T>;
 
-  constructor(config: Config) {
+  constructor(config: Config<T>) {
     this.config = config;
 
     const { path = '/', pingPath = path } = config;

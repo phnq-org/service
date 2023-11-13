@@ -1,4 +1,4 @@
-import Service, { ServiceConfig, ServiceInstanceInfo } from './Service';
+import Service, { ServiceApi, ServiceConfig, ServiceInstanceInfo } from './Service';
 
 export interface DefaultClient {
   ping(): Promise<string>;
@@ -11,11 +11,11 @@ export interface StandaloneClient extends DefaultClient {
   disconnect(): Promise<void>;
 }
 
-export type ClientConfig = Omit<ServiceConfig, 'domain' | 'handlers'>;
+export type ClientConfig<T extends ServiceApi<T>> = Omit<ServiceConfig<T>, 'domain' | 'handlers'>;
 
 class ServiceClient {
-  public static create<T>(domain: string, config: ClientConfig): T & StandaloneClient {
-    return new Service(config).getClient(domain);
+  public static create<T extends ServiceApi<T>>(domain: string, config: ClientConfig<T>): T & StandaloneClient {
+    return new Service<T>(config).getClient(domain);
   }
 }
 
