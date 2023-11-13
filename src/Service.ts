@@ -14,7 +14,7 @@ const PEER_PRUNE_THRESHOLD = 30 * 1000;
 const ALL_SERVICES_DOMAIN = 'all-services';
 
 interface AllServices {
-  checkIn(info: { origin: string; domain: string }): void;
+  checkIn(info: { origin: string; domain: string }): Promise<void>;
   requestCheckIn(): Promise<void>;
 }
 
@@ -24,32 +24,41 @@ export interface ServiceInstanceInfo {
   lastCheckIn: number;
 }
 
-export interface ServiceConfig {
+export interface ServiceConfig<T extends ServiceApi<T>> {
   /** Provides a way to address this service. A service with no domain is a client only. */
   domain?: string;
   nats: ConnectionOptions;
   signSalt: string;
-  handlers?: { [key: string]: ServiceHandler };
+  handlers?: { [K in keyof T]: (arg: Parameters<T[K]>[0], service: Service<T>) => ReturnType<T[K]> };
   /** Time (ms) alotted for a response before a timeout error. */
   responseTimeout?: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceHandler = (requestPayload: any, service: Service) => Promise<unknown | AsyncIterableIterator<unknown>>;
+type ServiceHandler = (arg: never) => Promise<unknown | AsyncIterableIterator<unknown>>;
+export type ServiceApi<T> = Record<keyof T, ServiceHandler>;
 
-class Service {
+export type ApiPlus<T extends Record<keyof T, ServiceHandler>> = {
+  [K in keyof T]: (arg: Parameters<T[K]>[0], service: Service<T>) => ReturnType<T[K]>;
+};
+
+class Service<T extends ServiceApi<T>> {
   public readonly origin = uuid().replace(/[^\w]/g, '');
   private log: Logger;
-  private config: ServiceConfig;
+  private config: ServiceConfig<T>;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
   private connection?: MessageConnection<ServiceRequestMessage, ServiceResponseMessage>;
-  private readonly handlers: AllServices & { [key: string]: ServiceHandler };
+  private readonly handlers: Record<
+    string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (arg: any, service: Service<T>) => Promise<unknown | AsyncIterableIterator<unknown>>
+  > &
+    AllServices;
   private connected = false;
   private allServicesClient = this.getClient<AllServices>(ALL_SERVICES_DOMAIN);
   private readonly peerServiceInstanceInfos: ServiceInstanceInfo[] = [];
   private checkInPid?: NodeJS.Timer;
 
-  public constructor(config: ServiceConfig) {
+  public constructor(config: ServiceConfig<T>) {
     this.log = createLogger(config.domain || 'client');
     this.config = config;
     this.transport = DEFAULT_TRANSPORT;

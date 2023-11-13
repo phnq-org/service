@@ -1,11 +1,15 @@
 import Context from '../../Context';
+import { ApiPlus } from '../../Service';
 import AuthApi from '../AuthApi';
 import AuthService from '../AuthService';
 
-const authenticate: AuthApi['authenticate'] = async (authReq, service?: AuthService) => {
-  if (service?.onAuthenticate) {
+type AuthApiPlus = ApiPlus<AuthApi>;
+
+const authenticate: AuthApiPlus['authenticate'] = async (authReq, service) => {
+  const authService = service as AuthService;
+  if (authService.onAuthenticate) {
     try {
-      const { identity } = await service.onAuthenticate(authReq);
+      const { identity } = await authService.onAuthenticate(authReq);
       Context.current.identity = identity;
       return { authenticated: true, identity };
     } catch (err) {

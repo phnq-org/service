@@ -38,19 +38,23 @@ interface CheeseApi {
   getOrigin(): Promise<string>;
 }
 
-const getOrigin: CheeseApi['getOrigin'] = async (_: void, service?: Service) => {
-  return service?.origin || '';
-};
+// const getOrigin: CheeseApi['getOrigin'] = async (_: void, service?: Service) => {
+//   return service?.origin || '';
+// };
 
 const cheeseServices = Array(3)
   .fill(0)
   .map(
     () =>
-      new Service({
+      new Service<CheeseApi>({
         signSalt: 'abcd1234',
         domain: 'cheese',
         nats: { servers: [NATS_URI] },
-        handlers: { getOrigin },
+        handlers: {
+          getOrigin: async (_, service) => {
+            return service.origin;
+          },
+        },
       }),
   );
 
