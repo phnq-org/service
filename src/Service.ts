@@ -29,7 +29,7 @@ export interface ServiceConfig<T extends ServiceApi<T>> {
   domain?: string;
   nats: ConnectionOptions;
   signSalt: string;
-  handlers?: { [K in keyof T]: (arg: Parameters<T[K]>[0], service: Service<T>) => ReturnType<T[K]> };
+  handlers?: ServiceApiImpl<T>;
   /** Time (ms) alotted for a response before a timeout error. */
   responseTimeout?: number;
 }
@@ -37,7 +37,7 @@ export interface ServiceConfig<T extends ServiceApi<T>> {
 type ServiceHandler = (arg: never) => Promise<unknown | AsyncIterableIterator<unknown>>;
 export type ServiceApi<T> = Record<keyof T, ServiceHandler>;
 
-export type ApiPlus<T extends Record<keyof T, ServiceHandler>> = {
+export type ServiceApiImpl<T extends Record<keyof T, ServiceHandler>> = {
   [K in keyof T]: (arg: Parameters<T[K]>[0], service: Service<T>) => ReturnType<T[K]>;
 };
 

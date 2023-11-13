@@ -1,6 +1,6 @@
 import { matchCategory } from '@phnq/log';
 
-import Service from '../Service';
+import Service, { ServiceApiImpl } from '../Service';
 import ServiceClient from '../ServiceClient';
 import { NATS_URI } from './etc/testenv';
 
@@ -38,9 +38,9 @@ interface CheeseApi {
   getOrigin(): Promise<string>;
 }
 
-// const getOrigin: CheeseApi['getOrigin'] = async (_: void, service?: Service) => {
-//   return service?.origin || '';
-// };
+const getOrigin: ServiceApiImpl<CheeseApi>['getOrigin'] = async (_, service) => {
+  return service.origin;
+};
 
 const cheeseServices = Array(3)
   .fill(0)
@@ -51,9 +51,7 @@ const cheeseServices = Array(3)
         domain: 'cheese',
         nats: { servers: [NATS_URI] },
         handlers: {
-          getOrigin: async (_, service) => {
-            return service.origin;
-          },
+          getOrigin,
         },
       }),
   );
