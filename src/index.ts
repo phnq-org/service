@@ -1,11 +1,11 @@
-import WsService from './api/ws/WebSocketApiService';
+import TheApiService from './api/ApiService';
 import TheAuthApi from './auth/AuthApi';
 import TheAuthService from './auth/AuthService';
 import TheContext from './Context';
 import TheService from './Service';
 import TheServiceClient from './ServiceClient';
 
-export const WebSocketApiService = WsService;
+export const ApiService = TheApiService;
 export type AuthApi = TheAuthApi;
 export const AuthService = TheAuthService;
 export const Service = TheService;

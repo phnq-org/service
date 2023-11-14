@@ -1,11 +1,11 @@
 import { Anomaly } from '@phnq/message';
 import { get } from 'http';
 
-import { Context, Serializable, Service, WebSocketApiService } from '..';
-import { WebSocketApiClient } from '../browser';
+import { ApiService, Context, Serializable, Service } from '..';
+import { ApiClient } from '../browser';
 import { NATS_URI } from './etc/testenv';
 
-describe('WebSocketApiService', () => {
+describe('ApiService', () => {
   beforeAll(async () => {
     await fruitService.connect();
     await vegService.connect();
@@ -93,15 +93,15 @@ describe('WebSocketApiService', () => {
 
 // ========================== TEST INFRASTRUCTURE ==========================
 
-const apiService = new WebSocketApiService({
+const apiService = new ApiService({
   port: 55777,
   signSalt: 'abcd1234',
   nats: { servers: [NATS_URI] },
 });
 
-const fruitWsClient = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777');
-const fruitWsClientWrongPort = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55778');
-const fruitWsClientWrongPath = WebSocketApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777/wrong-path');
+const fruitWsClient = ApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777');
+const fruitWsClientWrongPort = ApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55778');
+const fruitWsClientWrongPath = ApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777/wrong-path');
 
 interface VegApi {
   getKinds(): Promise<string[]>;

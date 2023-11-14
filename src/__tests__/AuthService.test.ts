@@ -1,5 +1,5 @@
-import { AuthApi, AuthService, ServiceClient, WebSocketApiService } from '..';
-import { WebSocketApiClient } from '../browser';
+import { ApiService, AuthApi, AuthService, ServiceClient } from '..';
+import { ApiClient } from '../browser';
 import { NATS_URI } from './etc/testenv';
 
 describe('AuthService', () => {
@@ -65,10 +65,10 @@ const authClient = ServiceClient.create<AuthApi>('auth', {
   nats: { servers: [NATS_URI] },
 });
 
-const apiService = new WebSocketApiService({
+const apiService = new ApiService({
   port: 55778,
   signSalt: 'abcd1234',
   nats: { servers: [NATS_URI] },
 });
 
-const authWsClient = WebSocketApiClient.create<AuthApi>('auth', 'ws://localhost:55778');
+const authWsClient = ApiClient.create<AuthApi>('auth', 'ws://localhost:55778');

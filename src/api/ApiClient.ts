@@ -1,10 +1,11 @@
 import { WebSocketMessageClient } from '@phnq/message/WebSocketMessageClient';
 
-import { StandaloneClient } from '../../ServiceClient';
-import { ApiRequestMessage, ApiResponseMessage } from '../ApiMessage';
+import { ServiceApi } from '../Service';
+import { StandaloneClient } from '../ServiceClient';
+import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
 
-class WebSocketApiClient {
-  public static create<T>(domain: string, url: string): T & StandaloneClient {
+class ApiClient {
+  public static create<T extends ServiceApi<T>>(domain: string, url: string): T & StandaloneClient {
     let wsClient: WebSocketMessageClient<ApiRequestMessage, ApiResponseMessage> | undefined;
     return new Proxy(
       {},
@@ -53,4 +54,4 @@ class WebSocketApiClient {
   }
 }
 
-export default WebSocketApiClient;
+export default ApiClient;

@@ -3,9 +3,9 @@ import { MessageConnection } from '@phnq/message';
 import { WebSocketMessageServer } from '@phnq/message/WebSocketMessageServer';
 import http from 'http';
 
-import Context, { ContextData } from '../../Context';
-import Service, { ServiceApi, ServiceConfig } from '../../Service';
-import { ApiRequestMessage, ApiResponseMessage } from '../ApiMessage';
+import Context, { ContextData } from '../Context';
+import Service, { ServiceApi, ServiceConfig } from '../Service';
+import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
 
 const log = createLogger('WebSocketApiService');
 
@@ -17,7 +17,7 @@ interface Config<T extends ServiceApi<T>> extends ServiceConfig<T> {
   pingPath?: string;
 }
 
-class WebSocketApiService<T extends ServiceApi<T>> {
+class ApiService<T extends ServiceApi<T>> {
   private config: Config<T>;
   private httpServer: http.Server;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>;
@@ -135,7 +135,7 @@ class WebSocketApiService<T extends ServiceApi<T>> {
   }
 }
 
-export default WebSocketApiService;
+export default ApiService;
 
 const getLangs = (req: http.IncomingMessage): string[] => {
   const acceptLangHeader = req.headers['accept-language'];
