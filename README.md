@@ -45,6 +45,7 @@ An alternative architecture to the traditional web server one involves having al
 
 ![Alt text](images/ws.png)
 
+> **Note:** there is an `ApiService` utility included in `@phnq/service`.
 
 ## Getting Started
 
