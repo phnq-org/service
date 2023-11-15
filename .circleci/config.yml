@@ -34,4 +34,4 @@ jobs:
           key: v1-dependencies-{{ checksum "package.json" }}
 
       # run tests!
-      - run: CCI=1 npm t -- --coverage
+      - run: npm test:cci

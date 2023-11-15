@@ -4,6 +4,8 @@
 
 [![npm version](https://badge.fury.io/js/%40phnq%2Fservice.svg)](https://badge.fury.io/js/%40phnq%2Fservice)
 
+> TL;DR - jump to [Getting Started](#getting-started) for a barebones example.
+
 ## Microservices Made Easy
 
 The pros and cons of microservices as an architectural pattern are an oft debated topic in software engineering circles. One ubiquitously shared opinion is that **ease of implementation** is not in the pros column. The `@phnq/service` library aims to take some of the pain out of getting started with microservices by providing  utilities that deal with the basic plumbing.
@@ -44,7 +46,60 @@ An alternative architecture to the traditional web server one involves having al
 ![Alt text](images/ws.png)
 
 
-<!-- ## Getting Started -->
+## Getting Started
+
+Here's a barebones example of how to use `@phnq/service` to create a service and a client for that service.
+
+#### Run NATS
+You will need a [NATS](https://nats.io/) server running. You can run one locally with Docker:
+```
+docker run nats
+```
+
+#### Create an API interface
+
+This interface will be used by both the service and the client.
+
+```ts
+interface GreetingsApi {
+  greet: (name: string) => Promise<string>;
+}
+```
+
+#### Create a Service
+
+Use the interface created above to define the service's handlers.
+
+```ts
+import { Service } from "@phnq/service";
+
+const greetingsService = new Service<GreetingsApi>('greetings', {
+  handlers: {
+    greet: async (name: string) => {
+      return `Hello, ${name}!`;
+    },
+  },
+});
+
+await greetingsService.connect();
+```
+> **Note**: the last statement should be wrapped in an async function unless you're using Bun which supports top-level await.
+
+#### Create a Service Client
+
+Use the same interface again to create a client for the service.
+
+```ts
+const greetingsClient = ServiceClient.create<GreetingsApi>('greetings');
+
+const greeting = await greetingsClient.greet('World'); // Hello, World!
+```
+
+That's it for a very basic example. The next section [Usage](#usage) will cover more advanced use cases.
+
+## Usage
+TBD
+
 
 
 

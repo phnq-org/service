@@ -2,7 +2,6 @@ import { matchCategory } from '@phnq/log';
 
 import Service, { ServiceApiImpl } from '../Service';
 import ServiceClient from '../ServiceClient';
-import { NATS_URI } from './etc/testenv';
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
   matchCategory(/.+/);
@@ -46,17 +45,11 @@ const cheeseServices = Array(3)
   .fill(0)
   .map(
     () =>
-      new Service<CheeseApi>({
-        signSalt: 'abcd1234',
-        domain: 'cheese',
-        nats: { servers: [NATS_URI] },
+      new Service<CheeseApi>('cheese', {
         handlers: {
           getOrigin,
         },
       }),
   );
 
-const cheeseClient = ServiceClient.create<CheeseApi>('cheese', {
-  signSalt: 'abcd1234',
-  nats: { servers: [NATS_URI] },
-});
+const cheeseClient = ServiceClient.create<CheeseApi>('cheese');

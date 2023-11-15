@@ -12,6 +12,13 @@ import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from '.
 const CHECK_IN_INTERVAL = 10 * 1000;
 const PEER_PRUNE_THRESHOLD = 30 * 1000;
 const ALL_SERVICES_DOMAIN = 'all-services';
+const DEFAULT_NATS_URI = 'nats://localhost:4222';
+const ENV_PHNQ_SERVICE_NATS = process.env.PHNQ_SERVICE_NATS;
+const ENV_PHNQ_SERVICE_SIGN_SALT = process.env.PHNQ_SERVICE_SIGN_SALT;
+
+const defaultNatsOptions: ConnectionOptions = {
+  servers: [ENV_PHNQ_SERVICE_NATS || DEFAULT_NATS_URI],
+};
 
 interface AllServices {
   checkIn(info: { origin: string; domain: string }): Promise<void>;
@@ -25,10 +32,8 @@ export interface ServiceInstanceInfo {
 }
 
 export interface ServiceConfig<T extends ServiceApi<T>> {
-  /** Provides a way to address this service. A service with no domain is a client only. */
-  domain?: string;
-  nats: ConnectionOptions;
-  signSalt: string;
+  nats?: ConnectionOptions;
+  signSalt?: string;
   handlers?: ServiceApiImpl<T>;
   /** Time (ms) alotted for a response before a timeout error. */
   responseTimeout?: number;
@@ -44,7 +49,8 @@ export type ServiceApiImpl<T extends Record<keyof T, ServiceHandler>> = {
 class Service<T extends ServiceApi<T>> {
   public readonly origin = uuid().replace(/[^\w]/g, '');
   private log: Logger;
-  private config: ServiceConfig<T>;
+  private readonly domain: string | null;
+  private readonly config: ServiceConfig<T>;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
   private connection?: MessageConnection<ServiceRequestMessage, ServiceResponseMessage>;
   private readonly handlers: Record<
@@ -58,8 +64,9 @@ class Service<T extends ServiceApi<T>> {
   private readonly peerServiceInstanceInfos: ServiceInstanceInfo[] = [];
   private checkInPid?: NodeJS.Timer;
 
-  public constructor(config: ServiceConfig<T>) {
-    this.log = createLogger(config.domain || 'client');
+  public constructor(domain: string | null, config: ServiceConfig<T> = {}) {
+    this.log = createLogger(domain || 'client');
+    this.domain = domain;
     this.config = config;
     this.transport = DEFAULT_TRANSPORT;
     this.handlers = Object.freeze({
@@ -77,14 +84,14 @@ class Service<T extends ServiceApi<T>> {
         return Promise.resolve();
       },
       requestCheckIn: () => {
-        if (config.domain) {
-          this.allServicesClient.checkIn({ origin: this.origin, domain: config.domain });
+        if (this.domain) {
+          this.allServicesClient.checkIn({ origin: this.origin, domain: this.domain });
         }
         return Promise.resolve();
       },
     });
-    if (config.domain) {
-      this.peerServiceInstanceInfos.push({ origin: this.origin, domain: config.domain, lastCheckIn: 0 });
+    if (this.domain) {
+      this.peerServiceInstanceInfos.push({ origin: this.origin, domain: this.domain, lastCheckIn: 0 });
     }
   }
 
@@ -101,11 +108,13 @@ class Service<T extends ServiceApi<T>> {
   }
 
   public async connect(): Promise<void> {
-    const { domain, nats, signSalt, responseTimeout } = this.config;
+    const { nats = defaultNatsOptions, signSalt = ENV_PHNQ_SERVICE_SIGN_SALT, responseTimeout } = this.config;
 
     if (this.connected) {
       return;
     }
+
+    const domain = this.domain;
 
     this.connected = true;
 
@@ -204,10 +213,10 @@ class Service<T extends ServiceApi<T>> {
    * @returns the latency in milliseconds
    */
   public async testLatency(): Promise<number> {
-    if (!this.config.domain) {
+    if (!this.domain) {
       throw new Error('testLatency requires a configured domain');
     }
-    const client = this.getClient(this.config.domain);
+    const client = this.getClient(this.domain);
     const start = process.hrtime.bigint();
     if ((await client.ping()) !== 'pong') {
       throw new Error('ping/pong failed');
