@@ -29,7 +29,7 @@ class ApiService<T extends ServiceApi<T>> {
     const { path = '/', pingPath = path } = config;
 
     this.httpServer = http.createServer();
-    this.apiService = new Service(this.config);
+    this.apiService = new Service(null, this.config);
     this.wsServer = new WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>({
       path,
       httpServer: this.httpServer,

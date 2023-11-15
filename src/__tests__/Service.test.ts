@@ -2,7 +2,7 @@ import { matchCategory } from '@phnq/log';
 import { Anomaly } from '@phnq/message';
 
 import { Context, Serializable, Service, ServiceClient } from '..';
-import { NATS_URI } from './etc/testenv';
+// import { NATS_URI } from './etc/testenv';
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
   matchCategory(/.+/);
@@ -43,7 +43,6 @@ describe('Service', () => {
   it('throws if connection fails', async () => {
     try {
       await ServiceClient.create<FruitApi>('fruit', {
-        signSalt: 'abcd1234',
         nats: { servers: ['nats://localhost:4225'] }, // wrong port
       }).connect();
       fail('should have thrown');
@@ -71,10 +70,7 @@ describe('Service', () => {
   });
 
   it('throws when testing latency without a domain', async () => {
-    const anonService = new Service({
-      signSalt: 'abcd1234',
-      nats: { servers: [NATS_URI] },
-    });
+    const anonService = new Service(null);
 
     try {
       await anonService.testLatency();
@@ -87,10 +83,7 @@ describe('Service', () => {
   });
 
   it('returns client connected state', async () => {
-    const client = ServiceClient.create<FruitApi>('fruit', {
-      signSalt: 'abcd1234',
-      nats: { servers: [NATS_URI] },
-    });
+    const client = ServiceClient.create<FruitApi>('fruit');
     expect(client.isConnected).toBe(false);
     await client.connect();
     expect(client.isConnected).toBe(true);
@@ -99,12 +92,7 @@ describe('Service', () => {
   });
 
   it('returns service connected state', async () => {
-    const service = new Service({
-      signSalt: 'abcd1234',
-      domain: 'some-service',
-      nats: { servers: [NATS_URI] },
-      handlers: {},
-    });
+    const service = new Service('some-service', { handlers: {} });
     expect(service.isConnected).toBe(false);
     await service.connect();
     expect(service.isConnected).toBe(true);
@@ -113,10 +101,7 @@ describe('Service', () => {
   });
 
   it('throws if no handler is found', async () => {
-    const fruitClientBadApi = ServiceClient.create<{ nope(): Promise<void> }>('fruit', {
-      signSalt: 'abcd1234',
-      nats: { servers: [NATS_URI] },
-    });
+    const fruitClientBadApi = ServiceClient.create<{ nope(): Promise<void> }>('fruit');
 
     try {
       await fruitClientBadApi.nope();
@@ -169,12 +154,7 @@ const getVegKinds: VegApi['getKinds'] = async () => {
   return ['carrot', 'celery', 'broccoli'];
 };
 
-const vegService = new Service({
-  signSalt: 'abcd1234',
-  domain: 'veg',
-  nats: { servers: [NATS_URI] },
-  handlers: { getKinds: getVegKinds },
-});
+const vegService = new Service('veg', { handlers: { getKinds: getVegKinds } });
 
 interface FruitApi {
   getKinds(): Promise<string[]>;
@@ -224,14 +204,8 @@ const getVeggies: FruitApi['getVeggies'] = async () => {
   return await vegClient.getKinds();
 };
 
-const fruitService = new Service({
-  signSalt: 'abcd1234',
-  domain: 'fruit',
-  nats: { servers: [NATS_URI] },
+const fruitService = new Service('fruit', {
   handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies },
 });
 
-const fruitClient = ServiceClient.create<FruitApi>('fruit', {
-  signSalt: 'abcd1234',
-  nats: { servers: [NATS_URI] },
-});
+const fruitClient = ServiceClient.create<FruitApi>('fruit');

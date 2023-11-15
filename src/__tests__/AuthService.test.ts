@@ -1,6 +1,5 @@
 import { ApiService, AuthApi, AuthService, ServiceClient } from '..';
 import { ApiClient } from '../browser';
-import { NATS_URI } from './etc/testenv';
 
 describe('AuthService', () => {
   beforeAll(async () => {
@@ -49,9 +48,6 @@ describe('AuthService', () => {
 // ========================== TEST INFRASTRUCTURE ==========================
 
 const authService = new AuthService({
-  signSalt: 'abcd1234',
-  domain: 'auth',
-  nats: { servers: [NATS_URI] },
   onAuthenticate: async (req: string) => {
     if (req === 'good-token') {
       return { identity: 'The User' };
@@ -60,15 +56,8 @@ const authService = new AuthService({
   },
 });
 
-const authClient = ServiceClient.create<AuthApi>('auth', {
-  signSalt: 'abcd1234',
-  nats: { servers: [NATS_URI] },
-});
+const authClient = ServiceClient.create<AuthApi>('auth');
 
-const apiService = new ApiService({
-  port: 55778,
-  signSalt: 'abcd1234',
-  nats: { servers: [NATS_URI] },
-});
+const apiService = new ApiService({ port: 55778 });
 
 const authWsClient = ApiClient.create<AuthApi>('auth', 'ws://localhost:55778');

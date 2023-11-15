@@ -3,7 +3,6 @@ import { get } from 'http';
 
 import { ApiService, Context, Serializable, Service } from '..';
 import { ApiClient } from '../browser';
-import { NATS_URI } from './etc/testenv';
 
 describe('ApiService', () => {
   beforeAll(async () => {
@@ -93,11 +92,7 @@ describe('ApiService', () => {
 
 // ========================== TEST INFRASTRUCTURE ==========================
 
-const apiService = new ApiService({
-  port: 55777,
-  signSalt: 'abcd1234',
-  nats: { servers: [NATS_URI] },
-});
+const apiService = new ApiService({ port: 55777 });
 
 const fruitWsClient = ApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777');
 const fruitWsClientWrongPort = ApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55778');
@@ -115,10 +110,7 @@ const getVegKinds: VegApi['getKinds'] = async () => {
   return ['carrot', 'celery', 'broccoli'];
 };
 
-const vegService = new Service({
-  signSalt: 'abcd1234',
-  domain: 'vegWs',
-  nats: { servers: [NATS_URI] },
+const vegService = new Service('vegWs', {
   handlers: { getKinds: getVegKinds },
 });
 
@@ -169,9 +161,6 @@ const getVeggies: FruitApi['getVeggies'] = async () => {
   return await vegClient.getKinds();
 };
 
-const fruitService = new Service({
-  signSalt: 'abcd1234',
-  domain: 'fruitWs',
-  nats: { servers: [NATS_URI] },
+const fruitService = new Service('fruitWs', {
   handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies },
 });

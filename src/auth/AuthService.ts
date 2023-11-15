@@ -2,7 +2,14 @@ import Service, { ServiceConfig } from '../Service';
 import AuthApi from './AuthApi';
 import authenticate from './handlers/authenticate';
 
+const DEFAULT_AUTH_DOMAIN = 'auth';
+
 interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, 'handlers'> {
+  /**
+   * The domain of the auth service. Defaults to `auth`.
+   */
+  domain?: string;
+
   /**
    * Setting this callback will enable authentication by delegating responsibility
    * to the application. The `authReq` argument is the payload of the `authenticate`
@@ -26,7 +33,7 @@ class AuthService extends Service<AuthApi> {
   public readonly onAuthenticate: AuthServiceConfig['onAuthenticate'];
 
   public constructor(config: AuthServiceConfig) {
-    super({ ...config, handlers: { authenticate } });
+    super(config.domain || DEFAULT_AUTH_DOMAIN, { ...config, handlers: { authenticate } });
     this.onAuthenticate = config.onAuthenticate;
   }
 }
