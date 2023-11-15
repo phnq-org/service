@@ -31,7 +31,7 @@ If this sounds like a web server, that's because it's more or less the same thin
 
 A service client provides a way to interact with a service. A service client is also associated with a domain, but instead of handling requests, it makes requests to a service with the same domain name. A service client's programmatic API methods are named after the handlers of the service it interacts with.
 
-> In the context of a whole system (i.e. frontend, backend, etc.), a service client as described above may seem like it would run in a web brower or mobile device, but it actually runs in the backend. Services and service clients provide a way for backend components to communicate with each other.
+> In the context of a whole system (i.e. frontend, backend, etc.), a service client as described above may seem like it would run in a web browser or mobile device, but it actually runs in the backend. Services and service clients provide a way for backend components to communicate with each other.
 
 ### Web Server/REST API Integration
 
