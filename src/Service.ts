@@ -9,30 +9,24 @@ import Context from './Context';
 import { DefaultClient } from './ServiceClient';
 import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
 
-const CHECK_IN_INTERVAL = 10 * 1000;
-const PEER_PRUNE_THRESHOLD = 30 * 1000;
-const ALL_SERVICES_DOMAIN = 'all-services';
 const DEFAULT_NATS_URI = 'nats://localhost:4222';
 const ENV_PHNQ_SERVICE_NATS = process.env.PHNQ_SERVICE_NATS;
+const DEFAULT_NATS_MONITOR_URI = 'nats://localhost:8222';
+const ENV_PHNQ_SERVICE_NATS_MONITOR = process.env.PHNQ_SERVICE_NATS_MONITOR;
 const ENV_PHNQ_SERVICE_SIGN_SALT = process.env.PHNQ_SERVICE_SIGN_SALT;
 
-const defaultNatsOptions: ConnectionOptions = {
+const defaultNatsOptions: ConnectionOptions & { monitorUrl?: string } = {
   servers: [ENV_PHNQ_SERVICE_NATS || DEFAULT_NATS_URI],
+  monitorUrl: ENV_PHNQ_SERVICE_NATS_MONITOR || DEFAULT_NATS_MONITOR_URI,
 };
-
-interface AllServices {
-  checkIn(info: { origin: string; domain: string }): Promise<void>;
-  requestCheckIn(): Promise<void>;
-}
 
 export interface ServiceInstanceInfo {
   origin: string;
-  domain: string;
-  lastCheckIn: number;
+  domain: string | null;
 }
 
 export interface ServiceConfig<T extends ServiceApi<T>> {
-  nats?: ConnectionOptions;
+  nats?: ConnectionOptions & { monitorUrl?: string };
   signSalt?: string;
   handlers?: ServiceApiImpl<T>;
   /** Time (ms) alotted for a response before a timeout error. */
@@ -57,12 +51,8 @@ class Service<T extends ServiceApi<T>> {
     string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (arg: any, service: Service<T>) => Promise<unknown | AsyncIterableIterator<unknown>>
-  > &
-    AllServices;
+  >;
   private connected = false;
-  private allServicesClient = this.getClient<AllServices>(ALL_SERVICES_DOMAIN);
-  private readonly peerServiceInstanceInfos: ServiceInstanceInfo[] = [];
-  private checkInPid?: NodeJS.Timer;
 
   public constructor(domain: string | null, config: ServiceConfig<T> = {}) {
     this.log = createLogger(domain || 'client');
@@ -72,39 +62,23 @@ class Service<T extends ServiceApi<T>> {
     this.handlers = Object.freeze({
       ...config.handlers,
       ping: async () => 'pong',
-      checkIn: ({ origin, domain }) => {
-        if (origin !== this.origin) {
-          const instance = this.peerServiceInstanceInfos.find(i => i.origin === origin);
-          if (instance) {
-            instance.lastCheckIn = Date.now();
-          } else {
-            this.peerServiceInstanceInfos.push({ origin, domain, lastCheckIn: Date.now() });
-          }
-        }
-        return Promise.resolve();
-      },
-      requestCheckIn: () => {
-        if (this.domain) {
-          this.allServicesClient.checkIn({ origin: this.origin, domain: this.domain });
-        }
-        return Promise.resolve();
-      },
     });
-    if (this.domain) {
-      this.peerServiceInstanceInfos.push({ origin: this.origin, domain: this.domain, lastCheckIn: 0 });
-    }
   }
 
   public get isConnected(): boolean {
     return this.connected;
   }
 
-  /**
-   * Returns a list of peer service instances that have checked in within the last 30 seconds.
-   * A peer service instance is a service instance that is using the same NATS server.
-   */
-  public get peerServiceInfos(): ServiceInstanceInfo[] {
-    return this.peerServiceInstanceInfos;
+  public async getPeers(): Promise<ServiceInstanceInfo[]> {
+    if (this.transport instanceof NATSTransport) {
+      const connectionNames = (await this.transport.getConnections()).map(c => c.name).filter(isDefined);
+      return connectionNames.map(name => {
+        const [origin, domain = null] = name.split('.').reverse();
+        return { domain, origin };
+      });
+    }
+
+    return [];
   }
 
   public async connect(): Promise<void> {
@@ -120,37 +94,46 @@ class Service<T extends ServiceApi<T>> {
 
     this.log('Starting service...');
 
+    const subscriptions: Parameters<typeof NATSTransport.create>[1]['subscriptions'] = [this.origin];
+
+    if (domain) {
+      subscriptions.push({ subject: domain, options: { queue: domain } });
+    }
+
     /**
      * Create a NATS transport.
      * This configiration deterimines how messages are routed.
      */
-    this.transport = await NATSTransport.create(nats, {
-      /**
-       * This service listens for incoming messages on the following subjects:
-       * - `origin` (uuid) messages sent directly to this service instance.
-       * - `domain` (string) messages sent to this service's domain.
-       * - `all-services` messages sent to all services.
-       */
-      subscriptions: [this.origin, domain, ALL_SERVICES_DOMAIN].filter(Boolean) as string[],
-      /**
-       * Outgoing messages are published to subjects as follows:
-       * - A `request` message is published to the `domain` subject.
-       * - Errors/Anomalies are published to the `origin` subject.
-       * - A `response` message is published to the `origin` subject.
-       *
-       * Note: `origin` refers to the originator of the message conversation.
-       */
-      publishSubject: ({ t, p }) => {
-        switch (t) {
-          case MessageType.Request:
-            return (p as ServiceRequestMessage).domain;
-          case MessageType.Anomaly:
-          case MessageType.Error:
-            return ((p as AnomalyMessage['p'] | ErrorMessage['p']).requestPayload as ServiceRequestMessage).origin;
-        }
-        return (p as ServiceResponseMessage).origin;
+    this.transport = await NATSTransport.create(
+      { ...nats, name: [domain, this.origin].filter(Boolean).join('.') },
+      {
+        /**
+         * This service listens for incoming messages on the following subjects:
+         * - `origin` (uuid) messages sent directly to this service instance.
+         * - `domain` (string) messages sent to this service's domain.
+         * - `all-services` messages sent to all services.
+         */
+        subscriptions,
+        /**
+         * Outgoing messages are published to subjects as follows:
+         * - A `request` message is published to the `domain` subject.
+         * - Errors/Anomalies are published to the `origin` subject.
+         * - A `response` message is published to the `origin` subject.
+         *
+         * Note: `origin` refers to the originator of the message conversation.
+         */
+        publishSubject: ({ t, p }) => {
+          switch (t) {
+            case MessageType.Request:
+              return (p as ServiceRequestMessage).domain;
+            case MessageType.Anomaly:
+            case MessageType.Error:
+              return ((p as AnomalyMessage['p'] | ErrorMessage['p']).requestPayload as ServiceRequestMessage).origin;
+          }
+          return (p as ServiceResponseMessage).origin;
+        },
       },
-    });
+    );
 
     this.log('Connected to NATS.');
 
@@ -159,29 +142,6 @@ class Service<T extends ServiceApi<T>> {
       marshalPayload: p => this.marshalPayload(p),
       unmarshalPayload: p => this.unmarshalPayload(p),
     });
-
-    if (domain) {
-      this.allServicesClient.checkIn({ origin: this.origin, domain });
-      /**
-       * After the immediate checkin above, start periodic checkins, but only after a random
-       * delay of up to `CHECK_IN_INTERVAL`. This is to avoid all services checking in at
-       * the same time.
-       */
-      setTimeout(() => {
-        this.checkInPid = setInterval(() => {
-          this.allServicesClient.checkIn({ origin: this.origin, domain });
-          const now = Date.now();
-          let i = this.peerServiceInstanceInfos.length;
-          while (i--) {
-            const instance = this.peerServiceInstanceInfos[i];
-            if (instance.origin !== this.origin && now - instance.lastCheckIn > PEER_PRUNE_THRESHOLD) {
-              this.log('Pruning peer service instance: %s (%s)', instance.origin, instance.domain);
-              this.peerServiceInstanceInfos.splice(i, 1);
-            }
-          }
-        }, CHECK_IN_INTERVAL);
-      }, Math.round(Math.random() * CHECK_IN_INTERVAL));
-    }
 
     if (responseTimeout !== undefined) {
       this.connection.responseTimeout = responseTimeout;
@@ -193,9 +153,6 @@ class Service<T extends ServiceApi<T>> {
   public async disconnect(): Promise<void> {
     if (this.connected) {
       this.connected = false;
-      if (this.checkInPid) {
-        clearInterval(this.checkInPid);
-      }
       await this.transport.close();
     }
   }
@@ -238,28 +195,6 @@ class Service<T extends ServiceApi<T>> {
    * @returns
    */
   public getClient<T = unknown>(domain: string): T & DefaultClient {
-    let lastServiceOrigin: string;
-
-    /**
-     * Looks up the service origin(s) for the client's domain and returns the next one
-     * based on a round-robin algorithm.
-     */
-    const getServiceOrigin = async (): Promise<string> => {
-      let serviceOrigins = this.peerServiceInstanceInfos.filter(i => i.domain === domain).map(i => i.origin);
-      if (serviceOrigins.length === 0) {
-        this.log('Cannot find service instance for domain `%s`. Roll call.', domain);
-        await this.allServicesClient.requestCheckIn();
-        await sleep(500);
-        serviceOrigins = this.peerServiceInstanceInfos.filter(i => i.domain === domain).map(i => i.origin);
-      }
-      if (serviceOrigins.length === 0) {
-        throw new Error(`No service instances found for domain: ${domain}`);
-      }
-      const serviceOriginIndex = (serviceOrigins.indexOf(lastServiceOrigin) + 1) % serviceOrigins.length;
-      lastServiceOrigin = serviceOrigins[serviceOriginIndex];
-      return lastServiceOrigin;
-    };
-
     return new Proxy(
       {},
       {
@@ -282,15 +217,9 @@ class Service<T extends ServiceApi<T>> {
             }
 
             if (this.connection) {
-              if (method === 'rollCall') {
-                await this.allServicesClient.requestCheckIn();
-                await sleep(500);
-                return this.peerServiceInstanceInfos;
-              }
-
               const response = await this.connection.request(
                 {
-                  domain: domain === ALL_SERVICES_DOMAIN ? domain : await getServiceOrigin(),
+                  domain,
                   origin: this.origin,
                   method,
                   payload,
@@ -389,6 +318,6 @@ const DEFAULT_TRANSPORT = {
   },
 };
 
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+const isDefined = <T = unknown>(val: T | undefined | null): val is T => val !== undefined && val !== null;
 
 export default Service;
