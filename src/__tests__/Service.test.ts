@@ -138,6 +138,12 @@ describe('Service', () => {
   it('uses client from service handler', async () => {
     expect(await fruitClient.getVeggies()).toStrictEqual(['carrot', 'celery', 'broccoli']);
   });
+
+  it('gets a list of peers', async () => {
+    const peers = await fruitService.getPeers();
+    expect(peers.find(p => p.origin === fruitService.origin)).toBeDefined();
+    expect(peers.find(p => p.origin === vegService.origin)).toBeDefined();
+  });
 });
 
 // ========================== TEST INFRASTRUCTURE ==========================

@@ -8,7 +8,10 @@ if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
 }
 
 describe('Load Balancing', () => {
+  let numHandled = 0;
+
   beforeAll(async () => {
+    numHandled = 0;
     for await (const s of cheeseServices) {
       await s.connect();
     }
@@ -27,29 +30,32 @@ describe('Load Balancing', () => {
       originResponses.push(await cheeseClient.getOrigin());
     }
 
-    expect(serviceOrigins.sort()).toStrictEqual(originResponses.sort());
+    expect(originResponses.every(o => serviceOrigins.includes(o))).toBe(true);
+    expect(originResponses.length).toBe(numHandled);
+    expect(numHandled).toBe(cheeseServices.length);
   });
+
+  // ========================== TEST INFRASTRUCTURE ==========================
+
+  interface CheeseApi {
+    getOrigin(): Promise<string>;
+  }
+
+  const getOrigin: ServiceApiImpl<CheeseApi>['getOrigin'] = async (_, service) => {
+    numHandled += 1;
+    return service.origin;
+  };
+
+  const cheeseServices = Array(3)
+    .fill(0)
+    .map(
+      () =>
+        new Service<CheeseApi>('cheese', {
+          handlers: {
+            getOrigin,
+          },
+        }),
+    );
+
+  const cheeseClient = ServiceClient.create<CheeseApi>('cheese');
 });
-
-// ========================== TEST INFRASTRUCTURE ==========================
-
-interface CheeseApi {
-  getOrigin(): Promise<string>;
-}
-
-const getOrigin: ServiceApiImpl<CheeseApi>['getOrigin'] = async (_, service) => {
-  return service.origin;
-};
-
-const cheeseServices = Array(3)
-  .fill(0)
-  .map(
-    () =>
-      new Service<CheeseApi>('cheese', {
-        handlers: {
-          getOrigin,
-        },
-      }),
-  );
-
-const cheeseClient = ServiceClient.create<CheeseApi>('cheese');
