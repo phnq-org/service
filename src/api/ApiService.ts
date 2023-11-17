@@ -7,7 +7,7 @@ import Context, { ContextData } from '../Context';
 import Service, { ServiceApi, ServiceConfig } from '../Service';
 import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
 
-const log = createLogger('WebSocketApiService');
+const log = createLogger('ApiService');
 
 interface Config<T extends ServiceApi<T>> extends ServiceConfig<T> {
   port: number;
