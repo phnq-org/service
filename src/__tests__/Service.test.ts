@@ -21,7 +21,7 @@ describe('Service', () => {
   });
 
   it('does latency test', async () => {
-    expect(typeof (await fruitService.testLatency())).toBe('number');
+    expect(typeof (await fruitService.testLatency())).toBe('numberX');
   });
 
   it('does ping from client', async () => {
