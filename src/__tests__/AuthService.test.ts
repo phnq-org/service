@@ -1,4 +1,5 @@
-import { ApiService, AuthApi, AuthService, ServiceClient } from '..';
+import { ApiService, AuthService } from '..';
+import AuthClient from '../auth/AuthClient';
 import { ApiClient } from '../browser';
 
 describe('AuthService', () => {
@@ -56,8 +57,8 @@ const authService = new AuthService({
   },
 });
 
-const authClient = ServiceClient.create<AuthApi>('auth');
+const authClient = AuthClient.create();
 
 const apiService = new ApiService({ port: 55778 });
 
-const authWsClient = ApiClient.create<AuthApi>('auth', 'ws://localhost:55778');
+const authWsClient = ApiClient.createAuthClient('ws://localhost:55778');

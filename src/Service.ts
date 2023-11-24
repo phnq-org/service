@@ -8,6 +8,7 @@ import { v4 as uuid } from 'uuid';
 import Context from './Context';
 import { DefaultClient } from './ServiceClient';
 import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
+import ServiceStats, { HandlerStatsReport, Stats } from './ServiceStats';
 
 const DEFAULT_NATS_URI = 'nats://localhost:4222';
 const ENV_PHNQ_SERVICE_NATS = process.env.PHNQ_SERVICE_NATS;
@@ -43,6 +44,8 @@ export type ServiceApiImpl<T extends Record<keyof T, ServiceHandler>> = {
 class Service<T extends ServiceApi<T>> {
   public readonly origin = uuid().replace(/[^\w]/g, '');
   private log: Logger;
+  private readonly serviceStats = new ServiceStats({ filter: (_, m) => !['ping', 'getStats'].includes(m) });
+  private readonly clientStats = new ServiceStats({ filter: (_, m) => m !== 'getStats' });
   private readonly domain: string | null;
   private readonly config: ServiceConfig<T>;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
@@ -62,11 +65,26 @@ class Service<T extends ServiceApi<T>> {
     this.handlers = Object.freeze({
       ...config.handlers,
       ping: async () => 'pong',
+      getStats: async () => this.stats,
     });
   }
 
   public get isConnected(): boolean {
     return this.connected;
+  }
+
+  public get stats(): {
+    origin: string;
+    domain: string | null;
+    service: Record<string, HandlerStatsReport>;
+    client: Record<string, HandlerStatsReport>;
+  } {
+    return {
+      origin: this.origin,
+      domain: this.domain,
+      service: this.serviceStats.stats,
+      client: this.clientStats.stats,
+    };
   }
 
   public async getPeers(): Promise<ServiceInstanceInfo[]> {
@@ -77,8 +95,12 @@ class Service<T extends ServiceApi<T>> {
         return { domain, origin };
       });
     }
-
     return [];
+  }
+
+  public async getPeerStats(): Promise<Stats[]> {
+    const peers = await this.getPeers();
+    return Promise.all(peers.map(peer => this.getClient(peer.origin).getStats()));
   }
 
   public async connect(): Promise<void> {
@@ -194,14 +216,23 @@ class Service<T extends ServiceApi<T>> {
    * @param domain
    * @returns
    */
-  public getClient<T = unknown>(domain: string): T & DefaultClient {
+  public getClient<T = unknown>(domain?: string): T & DefaultClient {
+    const { clientStats } = this;
     return new Proxy(
       {},
       {
         get: (_, method: string) => {
           if (method === 'isConnected') {
             return this.isConnected;
+          } else if (method === 'stats') {
+            return clientStats.stats;
           }
+
+          if (!domain) {
+            throw new Anomaly('No domain');
+          }
+
+          const start = performance.now();
 
           return async (payload: unknown) => {
             if (method === 'disconnect') {
@@ -234,17 +265,22 @@ class Service<T extends ServiceApi<T>> {
               ) {
                 const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
                 return (async function* () {
+                  let numResponses = 0;
                   for await (const { payload, sharedContextData } of responseIter) {
+                    numResponses += 1;
                     Context.current.merge(sharedContextData);
                     yield payload;
                   }
+                  clientStats.record(domain, method, { time: performance.now() - start, numResponses });
                 })();
               } else if (response) {
                 const { payload, sharedContextData } = response as ServiceResponseMessage;
                 Context.current.merge(sharedContextData);
+                clientStats.record(domain, method, { time: performance.now() - start });
                 return payload;
               }
             } else {
+              clientStats.record(domain, method, { time: performance.now() - start, error: true });
               // This should never happen.
               this.log.error('No connection');
             }
@@ -255,12 +291,15 @@ class Service<T extends ServiceApi<T>> {
   }
 
   private handleRequest({
+    domain,
     method,
     origin,
     payload,
     contextData,
   }: ServiceRequestMessage): Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>> {
     const start = process.hrtime.bigint();
+
+    const stats = this.serviceStats;
 
     const handler = this.handlers[method];
     if (handler) {
@@ -275,32 +314,41 @@ class Service<T extends ServiceApi<T>> {
             ) {
               resolve(
                 (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
+                  let numResponses = 0;
                   for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
+                    numResponses += 1;
                     yield {
                       origin,
                       payload,
-                      stats: { time: Number(process.hrtime.bigint() - start) },
+                      stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
                       sharedContextData: Context.current.sharedData,
                     };
                   }
+                  stats.record(domain, method, {
+                    time: Number(process.hrtime.bigint() - start) / 1_000_000,
+                    numResponses,
+                  });
                 })(),
               );
             } else {
+              const time = Number(process.hrtime.bigint() - start) / 1_000_000;
+              stats.record(domain, method, { time });
               resolve({
                 origin,
                 payload: response,
-                stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
+                stats: { time },
                 sharedContextData: Context.current.sharedData,
               });
             }
           } catch (err) {
-            this.log.error(`Error handling request [${method}]`).stack(err);
+            stats.record(domain, method, { time: Number(process.hrtime.bigint() - start) / 1_000_000, error: true });
+            this.log.error(`Error handling request [${domain}.${method}]`).stack(err);
             reject(err);
           }
         });
       });
     }
-    throw new Anomaly(`No handler for method: ${method}`);
+    throw new Anomaly(`No handler for method: ${domain}.${method}`);
   }
 }
 

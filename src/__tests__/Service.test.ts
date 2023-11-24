@@ -2,7 +2,6 @@ import { matchCategory } from '@phnq/log';
 import { Anomaly } from '@phnq/message';
 
 import { Context, Serializable, Service, ServiceClient } from '..';
-// import { NATS_URI } from './etc/testenv';
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
   matchCategory(/.+/);
@@ -12,6 +11,7 @@ describe('Service', () => {
   beforeAll(async () => {
     await fruitService.connect();
     await vegService.connect();
+    await fruitClient.connect();
   });
 
   afterAll(async () => {
@@ -108,7 +108,7 @@ describe('Service', () => {
       fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(Anomaly);
-      expect((err as Anomaly).message).toBe('No handler for method: nope');
+      expect((err as Anomaly).message).toBe('No handler for method: fruit.nope');
     }
 
     fruitClientBadApi.disconnect();
@@ -143,6 +143,12 @@ describe('Service', () => {
     const peers = await fruitService.getPeers();
     expect(peers.find(p => p.origin === fruitService.origin)).toBeDefined();
     expect(peers.find(p => p.origin === vegService.origin)).toBeDefined();
+  });
+
+  it('gets peer stats', async () => {
+    const peerStats = await fruitService.getPeerStats();
+    expect(peerStats.map(ps => ps.domain)).toContain('veg');
+    expect(peerStats.map(ps => ps.domain)).toContain('fruit');
   });
 });
 

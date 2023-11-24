@@ -1,11 +1,20 @@
 import { WebSocketMessageClient } from '@phnq/message/WebSocketMessageClient';
 
+import { AUTH_SERVICE_DOMAIN } from '../auth/AuthService';
+import { AuthApi } from '../browser';
 import { ServiceApi } from '../Service';
 import { StandaloneClient } from '../ServiceClient';
 import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
 
 class ApiClient {
-  public static create<T extends ServiceApi<T>>(domain: string, url: string): T & StandaloneClient {
+  public static createAuthClient(url: string): AuthApi & Omit<StandaloneClient, 'stats' | 'getStats'> {
+    return this.create<AuthApi>(AUTH_SERVICE_DOMAIN, url);
+  }
+
+  public static create<T extends ServiceApi<T>>(
+    domain: string,
+    url: string,
+  ): T & Omit<StandaloneClient, 'stats' | 'getStats'> {
     let wsClient: WebSocketMessageClient<ApiRequestMessage, ApiResponseMessage> | undefined;
     return new Proxy(
       {},
@@ -13,6 +22,8 @@ class ApiClient {
         get: (_, method: string) => {
           if (method === 'isConnected') {
             return wsClient !== undefined && wsClient.isOpen();
+          } else if (['stats', 'getStats'].includes(method)) {
+            throw new Error(`Method not available in client: ${method}`);
           }
 
           return async (payload: unknown) => {
