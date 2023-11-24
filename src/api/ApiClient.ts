@@ -1,7 +1,7 @@
 import { WebSocketMessageClient } from '@phnq/message/WebSocketMessageClient';
 
-import { AUTH_SERVICE_DOMAIN } from '../auth/AuthService';
 import { AuthApi } from '../browser';
+import { AUTH_SERVICE_DOMAIN } from '../domains';
 import { ServiceApi } from '../Service';
 import { StandaloneClient } from '../ServiceClient';
 import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';

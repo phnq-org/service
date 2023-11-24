@@ -1,8 +1,7 @@
+import { AUTH_SERVICE_DOMAIN } from '../domains';
 import Service, { ServiceConfig } from '../Service';
 import AuthApi from './AuthApi';
 import authenticate from './handlers/authenticate';
-
-export const AUTH_SERVICE_DOMAIN = '___auth___';
 
 interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, 'handlers'> {
   /**

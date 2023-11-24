@@ -4,13 +4,12 @@ import { WebSocketMessageServer } from '@phnq/message/WebSocketMessageServer';
 import http from 'http';
 
 import Context, { ContextData } from '../Context';
+import { API_SERVICE_DOMAIN } from '../domains';
 import Service, { ServiceApi, ServiceConfig } from '../Service';
 import { HandlerStatsReport } from '../ServiceStats';
 import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
 
 const log = createLogger('ApiService');
-
-export const API_SERVICE_DOMAIN = '___api___';
 
 interface Config<T extends ServiceApi<T>> extends Omit<ServiceConfig<T>, 'handlers'> {
   port: number;
