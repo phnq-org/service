@@ -5,11 +5,14 @@ import http from 'http';
 
 import Context, { ContextData } from '../Context';
 import Service, { ServiceApi, ServiceConfig } from '../Service';
+import { HandlerStatsReport } from '../ServiceStats';
 import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
 
 const log = createLogger('ApiService');
 
-interface Config<T extends ServiceApi<T>> extends ServiceConfig<T> {
+export const API_SERVICE_DOMAIN = '___api___';
+
+interface Config<T extends ServiceApi<T>> extends Omit<ServiceConfig<T>, 'handlers'> {
   port: number;
   transformResponsePayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
@@ -29,7 +32,7 @@ class ApiService<T extends ServiceApi<T>> {
     const { path = '/', pingPath = path } = config;
 
     this.httpServer = http.createServer();
-    this.apiService = new Service(null, this.config);
+    this.apiService = new Service(API_SERVICE_DOMAIN, this.config);
     this.wsServer = new WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>({
       path,
       httpServer: this.httpServer,
@@ -85,6 +88,10 @@ class ApiService<T extends ServiceApi<T>> {
     await this.apiService.disconnect();
 
     log('Stopped.');
+  }
+
+  public get stats(): Record<string, HandlerStatsReport> {
+    return this.apiService.getClient().stats;
   }
 
   /**
