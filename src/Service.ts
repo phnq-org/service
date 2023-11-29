@@ -12,7 +12,7 @@ import ServiceStats, { HandlerStatsReport, Stats } from './ServiceStats';
 
 const DEFAULT_NATS_URI = 'nats://localhost:4222';
 const ENV_PHNQ_SERVICE_NATS = process.env.PHNQ_SERVICE_NATS;
-const DEFAULT_NATS_MONITOR_URI = 'nats://localhost:8222';
+const DEFAULT_NATS_MONITOR_URI = 'http://localhost:8222';
 const ENV_PHNQ_SERVICE_NATS_MONITOR = process.env.PHNQ_SERVICE_NATS_MONITOR;
 const ENV_PHNQ_SERVICE_SIGN_SALT = process.env.PHNQ_SERVICE_SIGN_SALT;
 
