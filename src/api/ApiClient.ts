@@ -1,7 +1,7 @@
 import { WebSocketMessageClient } from '@phnq/message/WebSocketMessageClient';
 
 import AuthApi from '../auth/AuthApi';
-import { AUTH_SERVICE_DOMAIN } from '../domains';
+import { API_SERVICE_DOMAIN, AUTH_SERVICE_DOMAIN } from '../domains';
 import { ServiceApi } from '../Service';
 import { StandaloneClient } from '../ServiceClient';
 import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
@@ -11,9 +11,10 @@ class ApiClient {
     return this.create<AuthApi>(AUTH_SERVICE_DOMAIN, url);
   }
 
-  public static create<T extends ServiceApi<T>>(
+  public static create<T extends ServiceApi<T>, N extends { type: string } | undefined = undefined>(
     domain: string,
     url: string,
+    onNotify?: (msg: N) => void,
   ): T & Omit<StandaloneClient, 'stats' | 'getStats'> {
     let wsClient: WebSocketMessageClient<ApiRequestMessage, ApiResponseMessage> | undefined;
     return new Proxy(
@@ -36,6 +37,17 @@ class ApiClient {
 
             if (!wsClient) {
               wsClient = WebSocketMessageClient.create<ApiRequestMessage, ApiResponseMessage>(url);
+
+              if (onNotify) {
+                wsClient.onReceive = async ({ domain, method, payload }) => {
+                  if (domain === API_SERVICE_DOMAIN) {
+                    switch (method) {
+                      case 'notify':
+                        return onNotify(payload as N);
+                    }
+                  }
+                };
+              }
             }
 
             if (method === 'connect') {

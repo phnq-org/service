@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
+import { ApiNotificationMessage, NotifyApi } from './api/ApiMessage';
+import { API_SERVICE_DOMAIN } from './domains';
 import { DefaultClient } from './ServiceClient';
 
 const contextLocalStorage = new AsyncLocalStorage<Context>();
@@ -15,6 +17,7 @@ export type Serializable =
 
 export interface ContextData {
   [key: string]: Serializable;
+  connectionId?: string;
   identity?: string;
   langs?: string[];
 }
@@ -44,6 +47,20 @@ class Context {
 
   public getClient<T>(domain: string): T & DefaultClient {
     throw new Error(`No client for domain ${domain}`);
+  }
+
+  public notify<P extends { type: string }>(
+    payload: P,
+    recipient?: ApiNotificationMessage['recipient'],
+  ): Promise<void> {
+    const recip = recipient || (this.connectionId ? { id: this.connectionId } : undefined);
+    if (!recip) {
+      throw new Error('No recipient set and could not derive one.');
+    }
+    return this.getClient<NotifyApi>(API_SERVICE_DOMAIN).notify({
+      recipient: recip,
+      payload,
+    });
   }
 
   public set(key: string, val: Serializable, share = false): void {
@@ -80,6 +97,10 @@ class Context {
 
   public get langs(): string[] | undefined {
     return this.contextData.langs;
+  }
+
+  public get connectionId(): string | undefined {
+    return this.contextData.connectionId;
   }
 }
 

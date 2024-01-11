@@ -5,13 +5,12 @@ import http from 'http';
 
 import Context, { ContextData } from '../Context';
 import { API_SERVICE_DOMAIN } from '../domains';
-import Service, { ServiceApi, ServiceConfig } from '../Service';
-import { HandlerStatsReport } from '../ServiceStats';
-import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
+import Service from '../Service';
+import { ApiRequestMessage, ApiResponseMessage, NotifyApi } from './ApiMessage';
 
 const log = createLogger('ApiService');
 
-interface Config<T extends ServiceApi<T>> extends Omit<ServiceConfig<T>, 'handlers'> {
+interface Config {
   port: number;
   transformResponsePayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
@@ -19,19 +18,29 @@ interface Config<T extends ServiceApi<T>> extends Omit<ServiceConfig<T>, 'handle
   pingPath?: string;
 }
 
-class ApiService<T extends ServiceApi<T>> {
-  private config: Config<T>;
+class ApiService extends Service<NotifyApi> {
+  private apiServiceConfig: Config;
   private httpServer: http.Server;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>;
-  private apiService: Service<T>;
 
-  constructor(config: Config<T>) {
-    this.config = config;
+  constructor(config: Config) {
+    super(API_SERVICE_DOMAIN, {
+      ...config,
+      handlers: {
+        notify: async m => {
+          const conn = this.wsServer.getConnection(m.recipient.id);
+          if (conn) {
+            conn.send({ domain: API_SERVICE_DOMAIN, method: 'notify', payload: m.payload });
+          }
+        },
+      },
+    });
+
+    this.apiServiceConfig = config;
 
     const { path = '/', pingPath = path } = config;
 
     this.httpServer = http.createServer();
-    this.apiService = new Service(API_SERVICE_DOMAIN, this.config);
     this.wsServer = new WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>({
       path,
       httpServer: this.httpServer,
@@ -50,7 +59,7 @@ class ApiService<T extends ServiceApi<T>> {
   }
 
   public async start(): Promise<void> {
-    const { port } = this.config;
+    const { port } = this.apiServiceConfig;
 
     log('Starting server...');
     await new Promise<void>((resolve, reject): void => {
@@ -63,7 +72,7 @@ class ApiService<T extends ServiceApi<T>> {
     log('Server listening on port %d', port);
 
     log('Connecting to pub/sub...');
-    await this.apiService.connect();
+    await this.connect();
     log('Connected to pub/sub.');
   }
 
@@ -84,13 +93,9 @@ class ApiService<T extends ServiceApi<T>> {
     }
 
     log('Disconnecting from pub/sub...');
-    await this.apiService.disconnect();
+    await this.disconnect();
 
     log('Stopped.');
-  }
-
-  public get stats(): Record<string, HandlerStatsReport> {
-    return this.apiService.getClient().stats;
   }
 
   /**
@@ -111,16 +116,17 @@ class ApiService<T extends ServiceApi<T>> {
     requestMessage: ApiRequestMessage,
   ): Promise<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>> {
     const { domain, method, payload: payloadRaw } = requestMessage;
-    const { transformRequestPayload = p => p, transformResponsePayload = p => p } = this.config;
+    const { transformRequestPayload = p => p, transformResponsePayload = p => p } = this.apiServiceConfig;
 
     const payload = transformRequestPayload(payloadRaw, requestMessage);
 
     const context: ContextData = {
       identity: conn.getData<string | undefined>('identity'),
       langs: conn.getData<string[]>('langs'),
+      connectionId: conn.id,
     };
 
-    const serviceClient = this.apiService.getClient<{
+    const serviceClient = this.getClient<{
       [key: string]: (payload: unknown) => Promise<unknown | AsyncIterableIterator<unknown>>;
     }>(domain);
 
