@@ -18,10 +18,15 @@ interface Config {
   pingPath?: string;
 }
 
-class ApiService extends Service<NotifyApi> {
+interface ConnectionAttributes {
+  langs: string[];
+  identity?: string;
+}
+
+class ApiService<A = never> extends Service<NotifyApi> {
   private apiServiceConfig: Config;
   private httpServer: http.Server;
-  private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>;
+  private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>;
 
   constructor(config: Config) {
     super(API_SERVICE_DOMAIN, {
@@ -41,7 +46,7 @@ class ApiService extends Service<NotifyApi> {
     const { path = '/', pingPath = path } = config;
 
     this.httpServer = http.createServer();
-    this.wsServer = new WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage>({
+    this.wsServer = new WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>({
       path,
       httpServer: this.httpServer,
     });
@@ -105,14 +110,14 @@ class ApiService extends Service<NotifyApi> {
    * HTTP request for the purpose of storing connection-persisnet data.
    */
   private async onConnect(
-    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage>,
+    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes>,
     req: http.IncomingMessage,
   ): Promise<void> {
-    conn.setData('langs', getLangs(req));
+    conn.setAttribute('langs', getLangs(req));
   }
 
   private async onReceiveClientMessage(
-    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage>,
+    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes>,
     requestMessage: ApiRequestMessage,
   ): Promise<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>> {
     const { domain, method, payload: payloadRaw } = requestMessage;
@@ -121,8 +126,8 @@ class ApiService extends Service<NotifyApi> {
     const payload = transformRequestPayload(payloadRaw, requestMessage);
 
     const context: ContextData = {
-      identity: conn.getData<string | undefined>('identity'),
-      langs: conn.getData<string[]>('langs'),
+      identity: conn.getAttribute('identity'),
+      langs: conn.getAttribute('langs'),
       connectionId: conn.id,
     };
 
@@ -135,12 +140,12 @@ class ApiService extends Service<NotifyApi> {
       if (typeof response === 'object' && (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]) {
         return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
           for await (const payload of response as AsyncIterableIterator<unknown>) {
-            conn.setData('identity', Context.current.identity);
+            conn.setAttribute('identity', Context.current.identity);
             yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
           }
         })();
       } else {
-        conn.setData('identity', Context.current.identity);
+        conn.setAttribute('identity', Context.current.identity);
         return { payload: transformResponsePayload(response, requestMessage), stats: 0 };
       }
     });
