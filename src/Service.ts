@@ -1,7 +1,7 @@
 import { createLogger } from '@phnq/log';
 import { Logger } from '@phnq/log/logger';
 import { Anomaly, AnomalyMessage, ErrorMessage, MessageConnection, MessageTransport, MessageType } from '@phnq/message';
-import { NATSTransport } from '@phnq/message/transports/NATSTransport';
+import { NATSTransport, NATSTransportConnectionOptions } from '@phnq/message/transports/NATSTransport';
 import { ConnectionOptions } from 'nats';
 import { v4 as uuid } from 'uuid';
 
@@ -16,9 +16,11 @@ const DEFAULT_NATS_MONITOR_URI = 'http://localhost:8222';
 const ENV_PHNQ_SERVICE_NATS_MONITOR = process.env.PHNQ_SERVICE_NATS_MONITOR;
 const ENV_PHNQ_SERVICE_SIGN_SALT = process.env.PHNQ_SERVICE_SIGN_SALT;
 
-const defaultNatsOptions: ConnectionOptions & { monitorUrl?: string } = {
+const defaultNatsOptions: NATSTransportConnectionOptions = {
   servers: [ENV_PHNQ_SERVICE_NATS || DEFAULT_NATS_URI],
   monitorUrl: ENV_PHNQ_SERVICE_NATS_MONITOR || DEFAULT_NATS_MONITOR_URI,
+  maxReconnectAttempts: -1, // never give up
+  maxConnectAttempts: -1, // never give up
 };
 
 export interface ServiceInstanceInfo {
