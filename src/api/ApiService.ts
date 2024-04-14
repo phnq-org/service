@@ -1,7 +1,9 @@
 import { createLogger } from '@phnq/log';
 import { MessageConnection } from '@phnq/message';
 import { WebSocketMessageServer } from '@phnq/message/WebSocketMessageServer';
+import { readFileSync } from 'fs';
 import http from 'http';
+import https from 'https';
 
 import Context, { ContextData } from '../Context';
 import { API_SERVICE_DOMAIN } from '../domains';
@@ -11,11 +13,18 @@ import { ApiRequestMessage, ApiResponseMessage, NotifyApi } from './ApiMessage';
 const log = createLogger('ApiService');
 
 interface Config {
+  secure?: false;
   port: number;
   transformResponsePayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   path?: string;
   pingPath?: string;
+}
+
+interface SecureConfig extends Omit<Config, 'secure'> {
+  secure: true;
+  keyPath: string;
+  certPath: string;
 }
 
 interface ConnectionAttributes {
@@ -24,11 +33,11 @@ interface ConnectionAttributes {
 }
 
 class ApiService<A = never> extends Service<NotifyApi> {
-  private apiServiceConfig: Config;
-  private httpServer: http.Server;
+  private apiServiceConfig: Config | SecureConfig;
+  private httpServer: http.Server | https.Server;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>;
 
-  constructor(config: Config) {
+  constructor(config: Config | SecureConfig) {
     super(API_SERVICE_DOMAIN, {
       ...config,
       handlers: {
@@ -43,9 +52,15 @@ class ApiService<A = never> extends Service<NotifyApi> {
 
     this.apiServiceConfig = config;
 
-    const { path = '/', pingPath = path } = config;
+    const { path = '/', pingPath = path, secure } = config;
 
-    this.httpServer = http.createServer();
+    if (secure) {
+      const { keyPath, certPath } = config as SecureConfig;
+      this.httpServer = https.createServer({ key: readFileSync(keyPath), cert: readFileSync(certPath) });
+    } else {
+      this.httpServer = http.createServer();
+    }
+
     this.wsServer = new WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>({
       path,
       httpServer: this.httpServer,
