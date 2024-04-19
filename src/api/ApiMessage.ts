@@ -19,6 +19,7 @@ export interface ApiNotificationMessage extends ApiMessage {
    * - subscription: the key for a subscription (i.e. via pub/sub)
    */
   recipient: { id: string };
+  domain?: string;
 }
 
 export interface NotifyApi {

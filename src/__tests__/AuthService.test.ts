@@ -23,25 +23,17 @@ describe('AuthService', () => {
 
   describe('WebSocket Auth', () => {
     test('Auth success', async () => {
-      try {
-        const { identity, authenticated, error } = await authWsClient.authenticate('good-token');
-        expect(identity).toBe('The User');
-        expect(authenticated).toBe(true);
-        expect(error).toBeUndefined();
-      } catch (err) {
-        fail(err);
-      }
+      const { identity, authenticated, error } = await authWsClient.authenticate('good-token');
+      expect(identity).toBe('The User');
+      expect(authenticated).toBe(true);
+      expect(error).toBeUndefined();
     });
 
     test('Auth fail', async () => {
-      try {
-        const { identity, authenticated, error } = await authWsClient.authenticate('bad-token');
-        expect(identity).toBeUndefined();
-        expect(authenticated).toBe(false);
-        expect(error).toBe('not authenticated');
-      } catch (err) {
-        fail(err);
-      }
+      const { identity, authenticated, error } = await authWsClient.authenticate('bad-token');
+      expect(identity).toBeUndefined();
+      expect(authenticated).toBe(false);
+      expect(error).toBe('not authenticated');
     });
   });
 });

@@ -1,5 +1,5 @@
 import { createLogger } from '@phnq/log';
-import { MessageConnection } from '@phnq/message';
+import { Anomaly, MessageConnection } from '@phnq/message';
 import { WebSocketMessageServer } from '@phnq/message/WebSocketMessageServer';
 import { readFileSync } from 'fs';
 import http from 'http';
@@ -44,7 +44,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
         notify: async m => {
           const conn = this.wsServer.getConnection(m.recipient.id);
           if (conn) {
-            conn.send({ domain: API_SERVICE_DOMAIN, method: 'notify', payload: m.payload });
+            conn.send({ domain: m.domain || API_SERVICE_DOMAIN, method: 'notify', payload: m.payload });
           }
         },
       },
@@ -131,16 +131,26 @@ class ApiService<A = never> extends Service<NotifyApi> {
     conn.setAttribute('langs', getLangs(req));
   }
 
+  private checkAccess(domain: string, method: string): void {
+    if (domain.trim().charAt(0) === '_' || method.trim().charAt(0) === '_') {
+      throw new Anomaly(`Inaccessible: ${domain}.${method}`);
+    }
+  }
+
   private async onReceiveClientMessage(
     conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes>,
     requestMessage: ApiRequestMessage,
   ): Promise<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>> {
     const { domain, method, payload: payloadRaw } = requestMessage;
+
+    this.checkAccess(domain, method);
+
     const { transformRequestPayload = p => p, transformResponsePayload = p => p } = this.apiServiceConfig;
 
     const payload = transformRequestPayload(payloadRaw, requestMessage);
 
     const context: ContextData = {
+      domain,
       identity: conn.getAttribute('identity'),
       langs: conn.getAttribute('langs'),
       connectionId: conn.id,
@@ -150,7 +160,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
       [key: string]: (payload: unknown) => Promise<unknown | AsyncIterableIterator<unknown>>;
     }>(domain);
 
-    return Context.apply<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>>(context, async () => {
+    return Context.apply(context, async () => {
       const response = await serviceClient[method](payload);
       if (typeof response === 'object' && (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]) {
         return (async function* (): AsyncIterableIterator<ApiResponseMessage> {

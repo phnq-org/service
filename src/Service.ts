@@ -171,7 +171,7 @@ class Service<T extends ServiceApi<T>> {
       this.connection.responseTimeout = responseTimeout;
     }
 
-    this.connection.onReceive = message => this.handleRequest(message);
+    this.connection.onReceive = message => Context.apply(message.contextData, () => this.handleRequest(message));
   }
 
   public async disconnect(): Promise<void> {
@@ -218,7 +218,7 @@ class Service<T extends ServiceApi<T>> {
    * @param domain
    * @returns
    */
-  public getClient<T = unknown>(domain?: string): T & DefaultClient {
+  public getClient<T = unknown>(domain: string): T & DefaultClient {
     const { clientStats } = this;
     return new Proxy(
       {},
@@ -228,10 +228,6 @@ class Service<T extends ServiceApi<T>> {
             return this.isConnected;
           } else if (method === 'stats') {
             return clientStats.stats;
-          }
-
-          if (!domain) {
-            throw new Anomaly('No domain');
           }
 
           const start = performance.now();
@@ -256,7 +252,7 @@ class Service<T extends ServiceApi<T>> {
                   origin: this.origin,
                   method,
                   payload,
-                  contextData: Context.current.data,
+                  contextData: { ...Context.current.data, domain },
                 },
                 method !== 'checkIn',
               );
@@ -266,7 +262,9 @@ class Service<T extends ServiceApi<T>> {
                 (response as AsyncIterableIterator<ServiceResponseMessage>)[Symbol.asyncIterator]
               ) {
                 const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
+                const context = Context.current;
                 return (async function* () {
+                  Context.apply(context.data);
                   let numResponses = 0;
                   for await (const { payload, sharedContextData } of responseIter) {
                     numResponses += 1;
@@ -292,12 +290,11 @@ class Service<T extends ServiceApi<T>> {
     ) as T & DefaultClient;
   }
 
-  private handleRequest({
+  private async handleRequest({
     domain,
     method,
     origin,
     payload,
-    contextData,
   }: ServiceRequestMessage): Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>> {
     const start = process.hrtime.bigint();
 
@@ -305,50 +302,43 @@ class Service<T extends ServiceApi<T>> {
 
     const handler = this.handlers[method];
     if (handler) {
-      return new Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>>((resolve, reject) => {
-        Context.apply(contextData, async () => {
-          try {
-            Context.current.getClient = <T>(domain: string): T & DefaultClient => this.getClient(domain);
-            const response = await handler(payload, this);
-            if (
-              typeof response === 'object' &&
-              (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]
-            ) {
-              resolve(
-                (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
-                  let numResponses = 0;
-                  for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
-                    numResponses += 1;
-                    yield {
-                      origin,
-                      payload,
-                      stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
-                      sharedContextData: Context.current.sharedData,
-                    };
-                  }
-                  stats.record(domain, method, {
-                    time: Number(process.hrtime.bigint() - start) / 1_000_000,
-                    numResponses,
-                  });
-                })(),
-              );
-            } else {
-              const time = Number(process.hrtime.bigint() - start) / 1_000_000;
-              stats.record(domain, method, { time });
-              resolve({
+      try {
+        Context.current.getClient = <T>(domain: string): T & DefaultClient => this.getClient(domain);
+        const response = await handler(payload, this);
+        if (typeof response === 'object' && (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]) {
+          const context = Context.current;
+          return (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
+            Context.apply(context.data);
+            let numResponses = 0;
+            for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
+              numResponses += 1;
+              yield {
                 origin,
-                payload: response,
-                stats: { time },
+                payload,
+                stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
                 sharedContextData: Context.current.sharedData,
-              });
+              };
             }
-          } catch (err) {
-            stats.record(domain, method, { time: Number(process.hrtime.bigint() - start) / 1_000_000, error: true });
-            this.log.error(`Error handling request [${domain}.${method}]`).stack(err);
-            reject(err);
-          }
-        });
-      });
+            stats.record(domain, method, {
+              time: Number(process.hrtime.bigint() - start) / 1_000_000,
+              numResponses,
+            });
+          })();
+        } else {
+          const time = Number(process.hrtime.bigint() - start) / 1_000_000;
+          stats.record(domain, method, { time });
+          return {
+            origin,
+            payload: response,
+            stats: { time },
+            sharedContextData: Context.current.sharedData,
+          };
+        }
+      } catch (err) {
+        stats.record(domain, method, { time: Number(process.hrtime.bigint() - start) / 1_000_000, error: true });
+        this.log.error(`Error handling request [${domain}.${method}]`).stack(err);
+        throw err;
+      }
     }
     throw new Anomaly(`No handler for method: ${domain}.${method}`);
   }

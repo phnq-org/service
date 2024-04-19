@@ -16,6 +16,7 @@ export type Serializable =
   | { [key: string]: Serializable };
 
 export interface ContextData {
+  domain?: string;
   [key: string]: Serializable;
   connectionId?: string;
   identity?: string;
@@ -23,10 +24,25 @@ export interface ContextData {
 }
 
 class Context {
-  static apply<T>(data: ContextData, fn: () => Promise<T>): Promise<T> {
-    return new Promise<T>(resolve => {
-      contextLocalStorage.run(Context.current.merge(data), () => resolve(fn()));
-    });
+  /**
+   * Apply the given context data to the current execution context.
+   * @param data
+   */
+  static apply(data: ContextData): void;
+  /**
+   * Apply the given context data for the duration of the given function.
+   * @param data
+   * @param fn
+   */
+  static apply<T>(data: ContextData, fn: () => Promise<T>): Promise<T>;
+  static apply<T>(data: ContextData, fn?: () => Promise<T>): Promise<T> | void {
+    if (fn) {
+      return new Promise<T>(resolve => {
+        contextLocalStorage.run(new Context(data), () => resolve(fn()));
+      });
+    } else {
+      contextLocalStorage.enterWith(new Context(data));
+    }
   }
 
   static get current(): Context {
@@ -42,7 +58,7 @@ class Context {
 
   private constructor(contextData: ContextData) {
     this.contextData = contextData;
-    this.sharedContextData = {};
+    this.sharedContextData = { domain: contextData.domain };
   }
 
   public getClient<T>(domain: string): T & DefaultClient {
@@ -60,6 +76,7 @@ class Context {
     return this.getClient<NotifyApi>(API_SERVICE_DOMAIN).notify({
       recipient: recip,
       payload,
+      domain: this.domain,
     });
   }
 
@@ -93,6 +110,10 @@ class Context {
 
   public set identity(identity: string | undefined) {
     this.set('identity', identity, true);
+  }
+
+  public get domain(): string | undefined {
+    return this.contextData.domain;
   }
 
   public get langs(): string[] | undefined {

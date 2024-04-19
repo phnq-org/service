@@ -115,23 +115,28 @@ describe('Service', () => {
   });
 
   it('should retrieve current context', () => {
-    Context.apply({ foo: 'bar' }, async () => {
+    Context.apply({ domain: 'some-domain', foo: 'bar' }, async () => {
       expect(Context.current.get<string>('foo')).toBe('bar');
     });
   });
 
   it('applies context', async () => {
-    await new Promise<void>(resolve => {
-      Context.apply({ language: 'icelandic' }, async () => {
-        try {
-          expect(await fruitClient.getFromContext('language')).toBe('icelandic');
-          expect(Context.current.get('private')).toBeUndefined();
-          expect(Context.current.get('shared')).toBe('4anyone');
-        } catch (err) {
-          fail(err);
-        }
-        resolve();
-      });
+    await Context.apply({ language: 'icelandic' }, async () => {
+      expect(await fruitClient.getFromContext('language')).toBe('icelandic');
+      expect(Context.current.get('private')).toBeUndefined();
+      expect(Context.current.get('shared')).toBe('4anyone');
+    });
+  });
+
+  it('applies context iter', async () => {
+    await Context.apply({ language: 'icelandic' }, async () => {
+      const responses: string[] = [];
+
+      for await (const response of await fruitClient.getKindsIterator()) {
+        expect(Context.current.get('currentFruit')).toBe(response);
+        responses.push(response);
+      }
+      expect(responses).toStrictEqual(['apple', 'orange', 'pear']);
     });
   });
 
@@ -151,6 +156,8 @@ describe('Service', () => {
     expect(peerStats.map(ps => ps.domain)).toContain('fruit');
   });
 });
+
+// const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 // ========================== TEST INFRASTRUCTURE ==========================
 
@@ -180,8 +187,11 @@ const getKinds: FruitApi['getKinds'] = async () => ['apple', 'orange', 'pear'];
 
 const getKindsIterator: FruitApi['getKindsIterator'] = async () =>
   (async function* () {
+    Context.current.set('currentFruit', 'apple', true);
     yield 'apple';
+    Context.current.set('currentFruit', 'orange', true);
     yield 'orange';
+    Context.current.set('currentFruit', 'pear', true);
     yield 'pear';
   })();
 

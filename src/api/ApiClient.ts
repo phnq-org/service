@@ -38,14 +38,14 @@ class ApiClient {
             if (!wsClient) {
               wsClient = WebSocketMessageClient.create<ApiRequestMessage, ApiResponseMessage>(url);
 
-              wsClient.onReceive = async ({ domain, method, payload }) => {
-                if (onNotify && domain === API_SERVICE_DOMAIN) {
+              wsClient.addReceiveHandler(async ({ domain: notifyDomain, method, payload }) => {
+                if (onNotify && [domain, API_SERVICE_DOMAIN].includes(notifyDomain)) {
                   switch (method) {
                     case 'notify':
                       return onNotify(payload as N);
                   }
                 }
-              };
+              });
             }
 
             if (method === 'connect') {

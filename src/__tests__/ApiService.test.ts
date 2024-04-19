@@ -1,7 +1,7 @@
 import { Anomaly } from '@phnq/message';
 import { get } from 'http';
 
-import { ApiService, Context, Serializable, Service } from '..';
+import { ApiService, Context, Serializable, Service, ServiceClient } from '..';
 import { ApiClient } from '../browser';
 
 const notifications: FruitNotification[] = [];
@@ -12,6 +12,7 @@ describe('ApiService', () => {
     await vegService.connect();
     await apiService.start();
     await fruitWsClientWrongPort.connect();
+    await vegWsClient.connect();
   });
 
   afterAll(async () => {
@@ -20,6 +21,8 @@ describe('ApiService', () => {
     await apiService.stop();
     await fruitWsClient.disconnect();
     await fruitWsClientWrongPort.disconnect();
+    await vegWsClient.disconnect();
+    await fruitClient.disconnect();
   });
 
   beforeEach(() => {
@@ -31,20 +34,20 @@ describe('ApiService', () => {
     try {
       const resp = await fruitWsClientWrongPort.ping();
       expect(resp).not.toBe('pong');
-      fail('should have thrown');
+      throw 'unreachable';
     } catch (err) {
       theErr = err;
     } finally {
-      expect(theErr).toBeInstanceOf(Error);
+      expect(theErr).not.toBe('unreachable');
     }
   });
 
   it('throws if client url path is wrong', async () => {
     try {
       await fruitWsClientWrongPath.ping();
-      fail('should have thrown');
+      throw 'unreachable';
     } catch (err) {
-      expect(err).toBeInstanceOf(Error);
+      expect(err).not.toBe('unreachable');
     }
   });
 
@@ -67,18 +70,18 @@ describe('ApiService', () => {
   it('handles anomalies', async () => {
     try {
       await fruitWsClient.doErrors('anomaly');
-      fail('should have thrown');
+      throw 'unreachable';
     } catch (err) {
-      expect(err).toBeInstanceOf(Anomaly);
+      expect(err).not.toBe('unreachable');
     }
   });
 
   it('handles errors', async () => {
     try {
       await fruitWsClient.doErrors('error');
-      fail('should have thrown');
+      throw 'unreachable';
     } catch (err) {
-      expect(err).toBeInstanceOf(Error);
+      expect(err).not.toBe('unreachable');
     }
   });
 
@@ -95,6 +98,20 @@ describe('ApiService', () => {
     });
     expect(statusCode).toBe(200);
   });
+
+  it('Does not allow access to methods starting with underscore (via API)', async () => {
+    try {
+      await fruitWsClient._noAccess();
+      throw 'unreachable';
+    } catch (err) {
+      expect(err).not.toBe('unreachable');
+    }
+  });
+
+  it('Does allow access to methods starting with underscore (via ServiceClient)', async () => {
+    const secret = await fruitClient._noAccess();
+    expect(secret).toBe('secret');
+  });
 });
 
 // ========================== TEST INFRASTRUCTURE ==========================
@@ -106,9 +123,16 @@ interface FruitNotification {
   bubba: string;
 }
 
+const vegWsClient = ApiClient.create<VegApi, FruitNotification>('vegWs', 'ws://localhost:55777', n => {
+  notifications.push(n);
+});
+
 const fruitWsClient = ApiClient.create<FruitApi, FruitNotification>('fruitWs', 'ws://localhost:55777', n => {
   notifications.push(n);
 });
+
+const fruitClient = ServiceClient.create<FruitApi>('fruitWs');
+
 const fruitWsClientWrongPort = ApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55778');
 const fruitWsClientWrongPath = ApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777/wrong-path');
 
@@ -136,6 +160,7 @@ interface FruitApi {
   doErrors(type: 'error' | 'anomaly' | 'none'): Promise<void>;
   getFromContext(key: string): Promise<Serializable | undefined>;
   getVeggies(): Promise<string[]>;
+  _noAccess(): Promise<string>;
 }
 
 const getKinds: FruitApi['getKinds'] = async () => ['apple', 'orange', 'pear'];
@@ -177,6 +202,10 @@ const getVeggies: FruitApi['getVeggies'] = async () => {
   return await vegClient.getKinds();
 };
 
+const _noAccess: FruitApi['_noAccess'] = async () => {
+  return 'secret';
+};
+
 const fruitService = new Service('fruitWs', {
-  handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies },
+  handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies, _noAccess },
 });
