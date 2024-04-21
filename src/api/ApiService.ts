@@ -149,8 +149,8 @@ class ApiService<A = never> extends Service<NotifyApi> {
 
     const payload = transformRequestPayload(payloadRaw, requestMessage);
 
-    const context: ContextData = {
-      domain,
+    const contextData: ContextData = {
+      originDomain: domain,
       identity: conn.getAttribute('identity'),
       langs: conn.getAttribute('langs'),
       connectionId: conn.id,
@@ -160,10 +160,11 @@ class ApiService<A = never> extends Service<NotifyApi> {
       [key: string]: (payload: unknown) => Promise<unknown | AsyncIterableIterator<unknown>>;
     }>(domain);
 
-    return Context.apply(context, async () => {
+    return Context.apply(contextData, async () => {
       const response = await serviceClient[method](payload);
       if (typeof response === 'object' && (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]) {
         return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
+          Context.apply(contextData);
           for await (const payload of response as AsyncIterableIterator<unknown>) {
             conn.setAttribute('identity', Context.current.identity);
             yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };

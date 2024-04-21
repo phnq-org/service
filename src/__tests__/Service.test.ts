@@ -115,7 +115,7 @@ describe('Service', () => {
   });
 
   it('should retrieve current context', () => {
-    Context.apply({ domain: 'some-domain', foo: 'bar' }, async () => {
+    Context.apply({ originDomain: 'some-domain', foo: 'bar' }, async () => {
       expect(Context.current.get<string>('foo')).toBe('bar');
     });
   });

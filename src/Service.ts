@@ -252,7 +252,7 @@ class Service<T extends ServiceApi<T>> {
                   origin: this.origin,
                   method,
                   payload,
-                  contextData: { ...Context.current.data, domain },
+                  contextData: Context.current.data,
                 },
                 method !== 'checkIn',
               );

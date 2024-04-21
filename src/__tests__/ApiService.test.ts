@@ -4,7 +4,8 @@ import { get } from 'http';
 import { ApiService, Context, Serializable, Service, ServiceClient } from '..';
 import { ApiClient } from '../browser';
 
-const notifications: FruitNotification[] = [];
+const notificationsFruit: FruitNotification[] = [];
+const notificationsVeg: FruitNotification[] = [];
 
 describe('ApiService', () => {
   beforeAll(async () => {
@@ -26,7 +27,8 @@ describe('ApiService', () => {
   });
 
   beforeEach(() => {
-    notifications.length = 0;
+    notificationsFruit.length = 0;
+    notificationsVeg.length = 0;
   });
 
   it('throws if client url port is wrong', async () => {
@@ -87,7 +89,8 @@ describe('ApiService', () => {
 
   it('uses client from service handler', async () => {
     expect(await fruitWsClient.getVeggies()).toStrictEqual(['carrot', 'celery', 'broccoli']);
-    expect(notifications).toStrictEqual([{ bubba: 'gump', type: 'bubba' }]);
+    expect(notificationsFruit).toStrictEqual([{ bubba: 'gump', type: 'bubba' }]);
+    expect(notificationsVeg).toStrictEqual([]);
   });
 
   it('responds with a 200 status for ping path', async () => {
@@ -124,11 +127,11 @@ interface FruitNotification {
 }
 
 const vegWsClient = ApiClient.create<VegApi, FruitNotification>('vegWs', 'ws://localhost:55777', n => {
-  notifications.push(n);
+  notificationsVeg.push(n);
 });
 
 const fruitWsClient = ApiClient.create<FruitApi, FruitNotification>('fruitWs', 'ws://localhost:55777', n => {
-  notifications.push(n);
+  notificationsFruit.push(n);
 });
 
 const fruitClient = ServiceClient.create<FruitApi>('fruitWs');

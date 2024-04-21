@@ -16,11 +16,11 @@ export type Serializable =
   | { [key: string]: Serializable };
 
 export interface ContextData {
-  domain?: string;
-  [key: string]: Serializable;
+  originDomain?: string;
   connectionId?: string;
   identity?: string;
   langs?: string[];
+  [key: string]: Serializable;
 }
 
 class Context {
@@ -58,13 +58,21 @@ class Context {
 
   private constructor(contextData: ContextData) {
     this.contextData = contextData;
-    this.sharedContextData = { domain: contextData.domain };
+    this.sharedContextData = { originDomain: contextData.originDomain };
   }
 
   public getClient<T>(domain: string): T & DefaultClient {
     throw new Error(`No client for domain ${domain}`);
   }
 
+  /**
+   * Send a notification to the given recipient. The payload must have a `type` attribute.
+   * If no recipient is provided, the notification will be sent as a push on the WebSocket
+   * connection associated with the current context.
+   * @param payload
+   * @param recipient
+   * @returns
+   */
   public notify<P extends { type: string }>(
     payload: P,
     recipient?: ApiNotificationMessage['recipient'],
@@ -113,7 +121,7 @@ class Context {
   }
 
   public get domain(): string | undefined {
-    return this.contextData.domain;
+    return this.contextData.originDomain;
   }
 
   public get langs(): string[] | undefined {
