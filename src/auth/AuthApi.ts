@@ -1,5 +1,8 @@
 export default interface AuthApi {
-  authenticate(authReq: unknown): Promise<AuthResult>;
+  domain: 'phnq-auth';
+  handlers: {
+    authenticate(authReq: unknown): Promise<AuthResult>;
+  };
 }
 
 export interface AuthResult {

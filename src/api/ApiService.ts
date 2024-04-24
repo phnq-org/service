@@ -8,6 +8,7 @@ import https from 'https';
 import Context, { ContextData } from '../Context';
 import { API_SERVICE_DOMAIN } from '../domains';
 import Service from '../Service';
+import ServiceClient from '../ServiceClient';
 import { ApiRequestMessage, ApiResponseMessage, NotifyApi } from './ApiMessage';
 
 const log = createLogger('ApiService');
@@ -38,7 +39,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>;
 
   constructor(config: Config | SecureConfig) {
-    super(API_SERVICE_DOMAIN, {
+    super('_phnq-api', {
       ...config,
       handlers: {
         notify: async m => {
@@ -156,8 +157,9 @@ class ApiService<A = never> extends Service<NotifyApi> {
       connectionId: conn.id,
     };
 
-    const serviceClient = this.getClient<{
-      [key: string]: (payload: unknown) => Promise<unknown | AsyncIterableIterator<unknown>>;
+    const serviceClient = ServiceClient.create<{
+      domain: typeof domain;
+      handlers: Record<string, (payload: unknown) => Promise<unknown | AsyncIterableIterator<unknown>>>;
     }>(domain);
 
     return Context.apply(contextData, async () => {

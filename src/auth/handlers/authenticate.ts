@@ -1,9 +1,9 @@
 import Context from '../../Context';
-import { ServiceApiImpl } from '../../Service';
+import { Handler } from '../../Service';
 import AuthApi from '../AuthApi';
 import AuthService from '../AuthService';
 
-const authenticate: ServiceApiImpl<AuthApi>['authenticate'] = async (authReq, service) => {
+const authenticate: Handler<AuthApi, 'authenticate'> = async (authReq, service) => {
   const authService = service as AuthService;
   if (authService.onAuthenticate) {
     try {

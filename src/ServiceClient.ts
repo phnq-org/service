@@ -18,11 +18,14 @@ export interface StandaloneClient extends DefaultClient {
   disconnect(): Promise<void>;
 }
 
-export type ClientConfig<T extends ServiceApi<T>> = Omit<ServiceConfig<T>, 'handlers'>;
+export type ClientConfig<T extends ServiceApi<D>, D extends string = T['domain']> = Omit<ServiceConfig<T>, 'handlers'>;
 
 class ServiceClient {
-  public static create<T extends ServiceApi<T>>(domain: string, config?: ClientConfig<T>): T & StandaloneClient {
-    return new Service<T>(null, config).getClient(domain);
+  public static create<T extends ServiceApi<D>, D extends string = T['domain']>(
+    domain: D,
+    config?: ClientConfig<T>,
+  ): T['handlers'] & StandaloneClient {
+    return new Service<T>(domain, config).getClient() as T['handlers'] & StandaloneClient;
   }
 }
 

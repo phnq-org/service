@@ -1,21 +1,21 @@
 import { WebSocketMessageClient } from '@phnq/message/WebSocketMessageClient';
 
 import AuthApi from '../auth/AuthApi';
-import { API_SERVICE_DOMAIN, AUTH_SERVICE_DOMAIN } from '../domains';
+import { API_SERVICE_DOMAIN } from '../domains';
 import { ServiceApi } from '../Service';
 import { StandaloneClient } from '../ServiceClient';
 import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
 
 class ApiClient {
-  public static createAuthClient(url: string): AuthApi & Omit<StandaloneClient, 'stats' | 'getStats'> {
-    return this.create<AuthApi>(AUTH_SERVICE_DOMAIN, url);
+  public static createAuthClient(url: string): AuthApi['handlers'] & Omit<StandaloneClient, 'stats' | 'getStats'> {
+    return this.create<AuthApi>('phnq-auth', url);
   }
 
-  public static create<T extends ServiceApi<T>, N extends { type: string } | undefined = undefined>(
-    domain: string,
-    url: string,
-    onNotify?: (msg: N) => void,
-  ): T & Omit<StandaloneClient, 'stats' | 'getStats'> {
+  public static create<
+    T extends ServiceApi<D>,
+    N extends { type: string } | undefined = undefined,
+    D extends string = T['domain'],
+  >(domain: D, url: string, onNotify?: (msg: N) => void): T['handlers'] & Omit<StandaloneClient, 'stats' | 'getStats'> {
     let wsClient: WebSocketMessageClient<ApiRequestMessage, ApiResponseMessage> | undefined;
     return new Proxy(
       {},
@@ -71,7 +71,7 @@ class ApiClient {
           };
         },
       },
-    ) as T & StandaloneClient;
+    ) as T['handlers'] & StandaloneClient;
   }
 }
 

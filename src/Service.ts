@@ -6,7 +6,7 @@ import { ConnectionOptions } from 'nats';
 import { v4 as uuid } from 'uuid';
 
 import Context from './Context';
-import { DefaultClient } from './ServiceClient';
+import ServiceClient, { DefaultClient } from './ServiceClient';
 import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
 import ServiceStats, { HandlerStatsReport, Stats } from './ServiceStats';
 
@@ -28,38 +28,43 @@ export interface ServiceInstanceInfo {
   domain: string | null;
 }
 
-export interface ServiceConfig<T extends ServiceApi<T>> {
-  nats?: ConnectionOptions & { monitorUrl?: string };
-  signSalt?: string;
-  handlers?: ServiceApiImpl<T>;
-  /** Time (ms) alotted for a response before a timeout error. */
-  responseTimeout?: number;
+export interface ServiceApi<D extends string> {
+  domain: D;
+  handlers: {
+    [name: string]: (arg: never) => Promise<unknown | AsyncIterableIterator<unknown>>;
+  };
 }
 
-type ServiceHandler = (arg: never) => Promise<unknown | AsyncIterableIterator<unknown>>;
-export type ServiceApi<T> = Record<keyof T, ServiceHandler>;
+export interface ServiceConfig<T extends ServiceApi<D>, D extends string = T['domain']> {
+  nats?: ConnectionOptions & { monitorUrl?: string };
+  signSalt?: string;
+  responseTimeout?: number;
+  handlers?: {
+    [H in keyof T['handlers']]: Handler<T, H, D>;
+  };
+}
 
-export type ServiceApiImpl<T extends Record<keyof T, ServiceHandler>> = {
-  [K in keyof T]: (arg: Parameters<T[K]>[0], service: Service<T>) => ReturnType<T[K]>;
-};
+export type Handler<T extends ServiceApi<D>, H extends keyof T['handlers'], D extends string = T['domain']> = (
+  arg: Parameters<T['handlers'][H]>[0],
+  service: Service<T>,
+) => ReturnType<T['handlers'][H]>;
 
-class Service<T extends ServiceApi<T>> {
+class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
   public readonly origin = uuid().replace(/[^\w]/g, '');
   private log: Logger;
   private readonly serviceStats = new ServiceStats({ filter: (_, m) => !['ping', 'getStats'].includes(m) });
   private readonly clientStats = new ServiceStats({ filter: (_, m) => m !== 'getStats' });
-  private readonly domain: string | null;
+  private readonly domain: D;
   private readonly config: ServiceConfig<T>;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
   private connection?: MessageConnection<ServiceRequestMessage, ServiceResponseMessage>;
   private readonly handlers: Record<
     string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (arg: any, service: Service<T>) => Promise<unknown | AsyncIterableIterator<unknown>>
+    (arg: unknown, service: Service<T>) => Promise<unknown | AsyncIterableIterator<unknown>>
   >;
   private connected = false;
 
-  public constructor(domain: string | null, config: ServiceConfig<T> = {}) {
+  public constructor(domain: D, config: ServiceConfig<T> = {}) {
     this.log = createLogger(domain || 'client');
     this.domain = domain;
     this.config = config;
@@ -102,7 +107,7 @@ class Service<T extends ServiceApi<T>> {
 
   public async getPeerStats(): Promise<Stats[]> {
     const peers = await this.getPeers();
-    return Promise.all(peers.map(peer => this.getClient(peer.origin).getStats()));
+    return Promise.all(peers.map(peer => ServiceClient.create(peer.origin).getStats()));
   }
 
   public async connect(): Promise<void> {
@@ -120,7 +125,7 @@ class Service<T extends ServiceApi<T>> {
 
     const subscriptions: Parameters<typeof NATSTransport.create>[1]['subscriptions'] = [this.origin];
 
-    if (domain) {
+    if (this.config.handlers) {
       subscriptions.push({ subject: domain, options: { queue: domain } });
     }
 
@@ -197,7 +202,7 @@ class Service<T extends ServiceApi<T>> {
     if (!this.domain) {
       throw new Error('testLatency requires a configured domain');
     }
-    const client = this.getClient(this.domain);
+    const client = this.getClient();
     const start = process.hrtime.bigint();
     if ((await client.ping()) !== 'pong') {
       throw new Error('ping/pong failed');
@@ -218,8 +223,8 @@ class Service<T extends ServiceApi<T>> {
    * @param domain
    * @returns
    */
-  public getClient<T = unknown>(domain: string): T & DefaultClient {
-    const { clientStats } = this;
+  public getClient(): T['handlers'] & DefaultClient {
+    const { clientStats, domain } = this;
     return new Proxy(
       {},
       {
@@ -287,7 +292,7 @@ class Service<T extends ServiceApi<T>> {
           };
         },
       },
-    ) as T & DefaultClient;
+    ) as T['handlers'] & DefaultClient;
   }
 
   private async handleRequest({
@@ -303,7 +308,8 @@ class Service<T extends ServiceApi<T>> {
     const handler = this.handlers[method];
     if (handler) {
       try {
-        Context.current.getClient = <T>(domain: string): T & DefaultClient => this.getClient(domain);
+        Context.current.getClient = <T extends ServiceApi<D>, D extends string = T['domain']>(domain: D) =>
+          ServiceClient.create<T>(domain);
         const response = await handler(payload, this);
         if (typeof response === 'object' && (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]) {
           const context = Context.current;

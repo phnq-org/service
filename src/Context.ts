@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
 import { ApiNotificationMessage, NotifyApi } from './api/ApiMessage';
-import { API_SERVICE_DOMAIN } from './domains';
+import { ServiceApi } from './Service';
 import { DefaultClient } from './ServiceClient';
 
 const contextLocalStorage = new AsyncLocalStorage<Context>();
@@ -61,7 +61,7 @@ class Context {
     this.sharedContextData = { originDomain: contextData.originDomain };
   }
 
-  public getClient<T>(domain: string): T & DefaultClient {
+  public getClient<T extends ServiceApi<D>, D extends string = T['domain']>(domain: D): T['handlers'] & DefaultClient {
     throw new Error(`No client for domain ${domain}`);
   }
 
@@ -81,7 +81,7 @@ class Context {
     if (!recip) {
       throw new Error('No recipient set and could not derive one.');
     }
-    return this.getClient<NotifyApi>(API_SERVICE_DOMAIN).notify({
+    return this.getClient<NotifyApi>('_phnq-api').notify({
       recipient: recip,
       payload,
       domain: this.domain,

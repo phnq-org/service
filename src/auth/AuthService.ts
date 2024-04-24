@@ -1,4 +1,3 @@
-import { AUTH_SERVICE_DOMAIN } from '../domains';
 import Service, { ServiceConfig } from '../Service';
 import AuthApi from './AuthApi';
 import authenticate from './handlers/authenticate';
@@ -27,7 +26,7 @@ class AuthService extends Service<AuthApi> {
   public readonly onAuthenticate: AuthServiceConfig['onAuthenticate'];
 
   public constructor(config: AuthServiceConfig) {
-    super(AUTH_SERVICE_DOMAIN, { ...config, handlers: { authenticate } });
+    super('phnq-auth', { ...config, handlers: { authenticate } });
     this.onAuthenticate = config.onAuthenticate;
   }
 }

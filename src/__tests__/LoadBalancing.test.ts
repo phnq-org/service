@@ -1,6 +1,6 @@
 import { matchCategory } from '@phnq/log';
 
-import Service, { ServiceApiImpl } from '../Service';
+import Service, { Handler } from '../Service';
 import ServiceClient from '../ServiceClient';
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
@@ -38,10 +38,13 @@ describe('Load Balancing', () => {
   // ========================== TEST INFRASTRUCTURE ==========================
 
   interface CheeseApi {
-    getOrigin(): Promise<string>;
+    domain: 'cheese';
+    handlers: {
+      getOrigin(): Promise<string>;
+    };
   }
 
-  const getOrigin: ServiceApiImpl<CheeseApi>['getOrigin'] = async (_, service) => {
+  const getOrigin: Handler<CheeseApi, 'getOrigin'> = async (_, service) => {
     numHandled += 1;
     return service.origin;
   };

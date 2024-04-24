@@ -3,6 +3,7 @@ import { get } from 'http';
 
 import { ApiService, Context, Serializable, Service, ServiceClient } from '..';
 import { ApiClient } from '../browser';
+import { Handler } from '../Service';
 
 const notificationsFruit: FruitNotification[] = [];
 const notificationsVeg: FruitNotification[] = [];
@@ -140,10 +141,13 @@ const fruitWsClientWrongPort = ApiClient.create<FruitApi>('fruitWs', 'ws://local
 const fruitWsClientWrongPath = ApiClient.create<FruitApi>('fruitWs', 'ws://localhost:55777/wrong-path');
 
 interface VegApi {
-  getKinds(): Promise<string[]>;
+  domain: 'vegWs';
+  handlers: {
+    getKinds(): Promise<string[]>;
+  };
 }
 
-const getVegKinds: VegApi['getKinds'] = async () => {
+const getVegKinds: Handler<VegApi, 'getKinds'> = async () => {
   if (Context.current.get('bubba') !== 'gump') {
     throw new Error('Nope');
   }
@@ -153,29 +157,32 @@ const getVegKinds: VegApi['getKinds'] = async () => {
   return ['carrot', 'celery', 'broccoli'];
 };
 
-const vegService = new Service('vegWs', {
+const vegService = new Service<VegApi>('vegWs', {
   handlers: { getKinds: getVegKinds },
 });
 
 interface FruitApi {
-  getKinds(): Promise<string[]>;
-  getKindsIterator(): Promise<AsyncIterableIterator<string>>;
-  doErrors(type: 'error' | 'anomaly' | 'none'): Promise<void>;
-  getFromContext(key: string): Promise<Serializable | undefined>;
-  getVeggies(): Promise<string[]>;
-  _noAccess(): Promise<string>;
+  domain: 'fruitWs';
+  handlers: {
+    getKinds(): Promise<string[]>;
+    getKindsIterator(): Promise<AsyncIterableIterator<string>>;
+    doErrors(type: 'error' | 'anomaly' | 'none'): Promise<void>;
+    getFromContext(key: string): Promise<Serializable | undefined>;
+    getVeggies(): Promise<string[]>;
+    _noAccess(): Promise<string>;
+  };
 }
 
-const getKinds: FruitApi['getKinds'] = async () => ['apple', 'orange', 'pear'];
+const getKinds: Handler<FruitApi, 'getKinds'> = async () => ['apple', 'orange', 'pear'];
 
-const getKindsIterator: FruitApi['getKindsIterator'] = async () =>
+const getKindsIterator: Handler<FruitApi, 'getKindsIterator'> = async () =>
   (async function* () {
     yield 'apple';
     yield 'orange';
     yield 'pear';
   })();
 
-const doErrors: FruitApi['doErrors'] = async type => {
+const doErrors: Handler<FruitApi, 'doErrors'> = async type => {
   switch (type) {
     case 'anomaly':
       throw new Anomaly('the anomaly');
@@ -185,7 +192,7 @@ const doErrors: FruitApi['doErrors'] = async type => {
   }
 };
 
-const getFromContext: FruitApi['getFromContext'] = async key => {
+const getFromContext: Handler<FruitApi, 'getFromContext'> = async key => {
   Context.current.set('private', 'only4me');
 
   if (getMyData() !== 'only4me') {
@@ -199,16 +206,16 @@ const getMyData = (): string | undefined => {
   return Context.current.get<string>('private');
 };
 
-const getVeggies: FruitApi['getVeggies'] = async () => {
+const getVeggies: Handler<FruitApi, 'getVeggies'> = async () => {
   Context.current.set('bubba', 'gump');
   const vegClient = Context.current.getClient<VegApi>('vegWs');
   return await vegClient.getKinds();
 };
 
-const _noAccess: FruitApi['_noAccess'] = async () => {
+const _noAccess: Handler<FruitApi, '_noAccess'> = async () => {
   return 'secret';
 };
 
-const fruitService = new Service('fruitWs', {
+const fruitService = new Service<FruitApi>('fruitWs', {
   handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies, _noAccess },
 });

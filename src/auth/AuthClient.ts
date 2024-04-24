@@ -1,10 +1,9 @@
-import { AUTH_SERVICE_DOMAIN } from '../domains';
 import ServiceClient, { StandaloneClient } from '../ServiceClient';
 import AuthApi from './AuthApi';
 
 class AuthClient {
-  public static create(): AuthApi & StandaloneClient {
-    return ServiceClient.create<AuthApi>(AUTH_SERVICE_DOMAIN);
+  public static create(): AuthApi['handlers'] & StandaloneClient {
+    return ServiceClient.create<AuthApi>('phnq-auth');
   }
 }
 
