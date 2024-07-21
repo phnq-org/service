@@ -157,7 +157,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
       connectionId: conn.id,
     };
 
-    const serviceClient = ServiceClient.create<{
+    const serviceClient = ServiceClient.get<{
       domain: typeof domain;
       handlers: Record<string, (payload: unknown) => Promise<unknown | AsyncIterableIterator<unknown>>>;
     }>(domain);
