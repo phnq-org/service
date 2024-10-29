@@ -35,7 +35,7 @@ interface ConnectionAttributes {
 
 class ApiService<A = never> extends Service<NotifyApi> {
   private apiServiceConfig: Config | SecureConfig;
-  private httpServer: http.Server | https.Server;
+  public readonly httpServer: http.Server;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>;
 
   constructor(config: Config | SecureConfig) {
