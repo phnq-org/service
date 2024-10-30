@@ -85,8 +85,7 @@ describe('Service', () => {
 
   it('returns client connected state', async () => {
     const client = ServiceClient.create<FruitApi>('fruit');
-    expect(client.isConnected).toBe(false);
-    await client.connect();
+    // client is connected on create.
     expect(client.isConnected).toBe(true);
     await client.disconnect();
     expect(client.isConnected).toBe(false);
@@ -94,8 +93,7 @@ describe('Service', () => {
 
   it('returns service connected state', async () => {
     const service = new Service('some-service', { handlers: {} });
-    expect(service.isConnected).toBe(false);
-    await service.connect();
+    // service is connected on create.
     expect(service.isConnected).toBe(true);
     await service.disconnect();
     expect(service.isConnected).toBe(false);
