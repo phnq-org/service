@@ -35,8 +35,17 @@ interface ConnectionAttributes {
 
 class ApiService<A = never> extends Service<NotifyApi> {
   private apiServiceConfig: Config | SecureConfig;
-  public readonly httpServer: http.Server;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>;
+  public readonly httpServer: http.Server;
+  public onHttpRequest: (
+    req: http.IncomingMessage,
+    res: http.ServerResponse<http.IncomingMessage> & {
+      req: http.IncomingMessage;
+    },
+  ) => void = (_, res) => {
+    res.writeHead(404);
+    res.end();
+  };
 
   constructor(config: Config | SecureConfig) {
     super('_phnq-api', {
@@ -71,8 +80,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
         res.writeHead(200);
         res.end();
       } else {
-        res.writeHead(404);
-        res.end();
+        this.onHttpRequest(req, res);
       }
     });
     this.wsServer.onConnect = (conn, req) => this.onConnect(conn, req);
