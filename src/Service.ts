@@ -125,6 +125,13 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
           const subscriptions: Parameters<typeof NATSTransport.create>[1]['subscriptions'] = [this.origin];
 
           if (this.config.handlers) {
+            /**
+             * Load-balancing is achieved by setting the `queue` option to the domain name. This puts
+             * all services of the same domain into a queue group. Messages are then distributed by
+             * NATS to the grouped services randomly. NATS queueing is described here:
+             *
+             *   https://docs.nats.io/nats-concepts/core-nats/queue
+             */
             subscriptions.push({ subject: domain, options: { queue: domain } });
           }
 
@@ -376,5 +383,7 @@ const DEFAULT_TRANSPORT = {
 };
 
 const isDefined = <T = unknown>(val: T | undefined | null): val is T => val !== undefined && val !== null;
+
+// const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 export default Service;

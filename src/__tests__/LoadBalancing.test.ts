@@ -22,7 +22,7 @@ describe('Load Balancing', () => {
     await cheeseClient.disconnect();
   });
 
-  it('routes requests to services in a round-robin manner', async () => {
+  it('routes requests to services in a random manner', async () => {
     const serviceOrigins = cheeseServices.map(s => s.origin);
 
     const originResponses: string[] = [];
