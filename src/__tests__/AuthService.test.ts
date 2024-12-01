@@ -23,8 +23,9 @@ describe('AuthService', () => {
 
   describe('WebSocket Auth', () => {
     test('Auth success', async () => {
-      const { identity, authenticated, error } = await authWsClient.authenticate('good-token');
+      const { identity, authenticated, error, authResponse } = await authWsClient.authenticate('good-token');
       expect(identity).toBe('The User');
+      expect(authResponse).toBe('The Response');
       expect(authenticated).toBe(true);
       expect(error).toBeUndefined();
     });
@@ -43,7 +44,7 @@ describe('AuthService', () => {
 const authService = new AuthService({
   onAuthenticate: async (req: string) => {
     if (req === 'good-token') {
-      return { identity: 'The User' };
+      return { identity: 'The User', authResponse: 'The Response' };
     }
     throw new Error('not authenticated');
   },

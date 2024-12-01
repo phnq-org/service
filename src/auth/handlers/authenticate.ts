@@ -7,9 +7,9 @@ const authenticate: Handler<AuthApi, 'authenticate'> = async (authReq, service) 
   const authService = service as AuthService;
   if (authService.onAuthenticate) {
     try {
-      const { identity } = await authService.onAuthenticate(authReq);
+      const { identity, authResponse } = await authService.onAuthenticate(authReq);
       Context.current.identity = identity;
-      return { authenticated: true, identity };
+      return { authenticated: true, identity, authResponse };
     } catch (err) {
       Context.current.identity = undefined;
       return { authenticated: false, error: (err as Error).message || String(err) };

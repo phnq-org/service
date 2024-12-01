@@ -11,7 +11,9 @@ interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, 'handlers'> {
    * If the application is able to successfully authenticate a user from the `authReq`
    * argument, then this callback should return an object with an `identity` property.
    * The `identity` property should be a string that uniquely and consistently identifies
-   * the user -- i.e. a user ID or email address.
+   * the user -- i.e. a user ID or email address. Optionally, the callback can also return
+   * an `authResponse` property with any additional data that should be returned to the
+   * client. For example, a session token could be returned in the `authResponse` property.
    *
    * If authentication fails, then this callback should throw an error.
    *
@@ -19,7 +21,7 @@ interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, 'handlers'> {
    * @returns An object with an `identity` property if authentication is successful.
    * @throws An error if authentication fails.
    */
-  onAuthenticate?(authReq: unknown): Promise<{ identity: string }>;
+  onAuthenticate?(authReq: unknown): Promise<{ identity: string; authResponse?: unknown }>;
 }
 
 class AuthService extends Service<AuthApi> {

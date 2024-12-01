@@ -9,4 +9,5 @@ export interface AuthResult {
   authenticated: boolean;
   identity?: string;
   error?: string;
+  authResponse?: unknown;
 }
