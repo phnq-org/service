@@ -20,6 +20,7 @@ interface Config {
   transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   path?: string;
   pingPath?: string;
+  logConnections?: boolean;
 }
 
 interface SecureConfig extends Omit<Config, 'secure'> {
@@ -84,6 +85,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
       }
     });
     this.wsServer.onConnect = (conn, req) => this.onConnect(conn, req);
+    this.wsServer.onDisconnect = conn => this.onDisconnect(conn);
     this.wsServer.onReceive = (conn, message) => this.onReceiveClientMessage(conn, message);
   }
 
@@ -137,7 +139,18 @@ class ApiService<A = never> extends Service<NotifyApi> {
     conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes>,
     req: http.IncomingMessage,
   ): Promise<void> {
+    if (this.apiServiceConfig.logConnections) {
+      log('Connected:', conn.id);
+    }
     conn.setAttribute('langs', getLangs(req));
+  }
+
+  private async onDisconnect(
+    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes>,
+  ): Promise<void> {
+    if (this.apiServiceConfig.logConnections) {
+      log('Disconnected:', conn.id);
+    }
   }
 
   private checkAccess(domain: string, method: string): void {
