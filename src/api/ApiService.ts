@@ -37,7 +37,7 @@ interface ConnectionAttributes {
 class ApiService<A = never> extends Service<NotifyApi> {
   private apiServiceConfig: Config | SecureConfig;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>;
-  public readonly httpServer: http.Server;
+  public readonly _httpServer: http.Server;
   public onHttpRequest: (
     req: http.IncomingMessage,
     res: http.ServerResponse<http.IncomingMessage> & {
@@ -67,9 +67,9 @@ class ApiService<A = never> extends Service<NotifyApi> {
 
     if (secure) {
       const { keyPath, certPath } = config as SecureConfig;
-      this.httpServer = https.createServer({ key: readFileSync(keyPath), cert: readFileSync(certPath) });
+      this._httpServer = https.createServer({ key: readFileSync(keyPath), cert: readFileSync(certPath) });
     } else {
-      this.httpServer = http.createServer();
+      this._httpServer = http.createServer();
     }
 
     this.wsServer = new WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes & A>({
@@ -87,6 +87,10 @@ class ApiService<A = never> extends Service<NotifyApi> {
     this.wsServer.onConnect = (conn, req) => this.onConnect(conn, req);
     this.wsServer.onDisconnect = conn => this.onDisconnect(conn);
     this.wsServer.onReceive = (conn, message) => this.onReceiveClientMessage(conn, message);
+  }
+
+  get httpServer(): http.Server {
+    return this._httpServer;
   }
 
   public async start(): Promise<void> {
