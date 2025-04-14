@@ -7,6 +7,7 @@ import { v4 as uuid } from 'uuid';
 
 import Context from './Context';
 import ServiceClient, { DefaultClient } from './ServiceClient';
+import ServiceError from './ServiceError';
 import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
 import ServiceStats, { HandlerStatsReport, Stats } from './ServiceStats';
 
@@ -361,6 +362,11 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
       } catch (err) {
         stats.record(domain, method, { time: Number(process.hrtime.bigint() - start) / 1_000_000, error: true });
         this.log.error(`Error handling request [${domain}.${method}]`).stack(err);
+
+        if (err instanceof ServiceError && err.type !== 'server-error') {
+          throw new Anomaly(err.message, err.payload);
+        }
+
         throw err;
       }
     }

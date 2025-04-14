@@ -1,6 +1,9 @@
 import { ApiService, AuthService } from '..';
 import AuthClient from '../auth/AuthClient';
 import { ApiClient } from '../browser';
+import ServiceError from '../ServiceError';
+
+const serviceErrors: ServiceError[] = [];
 
 describe('AuthService', () => {
   beforeAll(async () => {
@@ -8,6 +11,12 @@ describe('AuthService', () => {
     await authClient.connect();
     await apiService.start();
     await authWsClient.connect();
+
+    serviceErrors.length = 0;
+
+    ApiClient.on('error', ({ err }) => {
+      serviceErrors.push(err);
+    });
   });
 
   afterAll(async () => {
@@ -15,6 +24,8 @@ describe('AuthService', () => {
     await authClient.disconnect();
     await apiService.stop();
     await authWsClient.disconnect();
+
+    expect(serviceErrors.map(err => err.type)).toEqual(['unauthorized']);
   });
 
   test('ping', async () => {
@@ -31,10 +42,17 @@ describe('AuthService', () => {
     });
 
     test('Auth fail', async () => {
-      const { identity, authenticated, error } = await authWsClient.authenticate('bad-token');
-      expect(identity).toBeUndefined();
-      expect(authenticated).toBe(false);
-      expect(error).toBe('not authenticated');
+      try {
+        await authWsClient.authenticate('bad-token');
+        fail('Expected error not thrown');
+      } catch (err) {
+        if (err instanceof ServiceError) {
+          expect(err.type).toBe('unauthorized');
+          expect(err.message).toBe('not authenticated');
+        } else {
+          fail('Expected ServiceError, got ' + err);
+        }
+      }
     });
   });
 });
@@ -46,7 +64,7 @@ const authService = new AuthService({
     if (req === 'good-token') {
       return { identity: 'The User', authResponse: 'The Response' };
     }
-    throw new Error('not authenticated');
+    throw new ServiceError({ type: 'unauthorized', message: 'not authenticated' });
   },
 });
 
