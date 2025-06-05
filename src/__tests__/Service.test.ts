@@ -2,6 +2,7 @@ import { matchCategory } from '@phnq/log';
 import { Anomaly } from '@phnq/message';
 
 import { Context, Serializable, Service, ServiceClient } from '..';
+import { NATS_MONITOR_URI } from '../config';
 import { Handler } from '../Service';
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === '1') {
@@ -143,17 +144,21 @@ describe('Service', () => {
     expect(await fruitClient.getVeggies()).toStrictEqual(['carrot', 'celery', 'broccoli']);
   });
 
-  it('gets a list of peers', async () => {
-    const peers = await fruitService.getPeers();
-    expect(peers.find(p => p.origin === fruitService.origin)).toBeDefined();
-    expect(peers.find(p => p.origin === vegService.origin)).toBeDefined();
-  });
+  if (NATS_MONITOR_URI) {
+    it('gets a list of peers', async () => {
+      const peers = await fruitService.getPeers();
+      expect(peers.find(p => p.origin === fruitService.origin)).toBeDefined();
+      expect(peers.find(p => p.origin === vegService.origin)).toBeDefined();
+    });
 
-  it('gets peer stats', async () => {
-    const peerStats = await fruitService.getPeerStats();
-    expect(peerStats.map(ps => ps.domain)).toContain('veg');
-    expect(peerStats.map(ps => ps.domain)).toContain('fruit');
-  });
+    it('gets peer stats', async () => {
+      const peerStats = await fruitService.getPeerStats();
+      expect(peerStats.map(ps => ps.domain)).toContain('veg');
+      expect(peerStats.map(ps => ps.domain)).toContain('fruit');
+    });
+  } else {
+    console.info('Skipping peer stats test because NATS_MONITOR_URI is not set.');
+  }
 });
 
 // const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));

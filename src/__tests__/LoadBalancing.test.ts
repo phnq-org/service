@@ -1,5 +1,6 @@
 import { matchCategory } from '@phnq/log';
 
+import { NATS_URI } from '../config';
 import Service, { Handler } from '../Service';
 import ServiceClient from '../ServiceClient';
 
@@ -23,16 +24,20 @@ describe('Load Balancing', () => {
   });
 
   it('routes requests to services in a random manner', async () => {
-    const serviceOrigins = cheeseServices.map(s => s.origin);
+    if (NATS_URI) {
+      const serviceOrigins = cheeseServices.map(s => s.origin);
 
-    const originResponses: string[] = [];
-    for (let i = 0; i < cheeseServices.length; i++) {
-      originResponses.push(await cheeseClient.getOrigin());
+      const originResponses: string[] = [];
+      for (let i = 0; i < cheeseServices.length; i++) {
+        originResponses.push(await cheeseClient.getOrigin());
+      }
+
+      expect(originResponses.every(o => serviceOrigins.includes(o))).toBe(true);
+      expect(originResponses.length).toBe(numHandled);
+      expect(numHandled).toBe(cheeseServices.length);
+    } else {
+      console.info('Skipping load balancing test because NATS_URI is not set.');
     }
-
-    expect(originResponses.every(o => serviceOrigins.includes(o))).toBe(true);
-    expect(originResponses.length).toBe(numHandled);
-    expect(numHandled).toBe(cheeseServices.length);
   });
 
   // ========================== TEST INFRASTRUCTURE ==========================

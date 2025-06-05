@@ -1,27 +1,31 @@
 import { createLogger } from '@phnq/log';
 import { Logger } from '@phnq/log/logger';
 import { Anomaly, AnomalyMessage, ErrorMessage, MessageConnection, MessageTransport, MessageType } from '@phnq/message';
+import { LocalPubSubTransport } from '@phnq/message/transports/LocalPubSubTransport';
 import { NATSTransport, NATSTransportConnectionOptions } from '@phnq/message/transports/NATSTransport';
 import { ConnectionOptions } from 'nats';
 import { v4 as uuid } from 'uuid';
 
+import { NATS_MONITOR_URI, NATS_URI, SIGN_SALT } from './config';
 import Context from './Context';
 import ServiceClient, { DefaultClient } from './ServiceClient';
 import ServiceError from './ServiceError';
 import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
 import ServiceStats, { HandlerStatsReport, Stats } from './ServiceStats';
 
-const DEFAULT_NATS_URI = 'nats://localhost:4222';
-const ENV_PHNQ_SERVICE_NATS = process.env.PHNQ_SERVICE_NATS;
-const DEFAULT_NATS_MONITOR_URI = 'http://localhost:8222';
-const ENV_PHNQ_SERVICE_NATS_MONITOR = process.env.PHNQ_SERVICE_NATS_MONITOR;
-const ENV_PHNQ_SERVICE_SIGN_SALT = process.env.PHNQ_SERVICE_SIGN_SALT;
-
-const defaultNatsOptions: NATSTransportConnectionOptions = {
-  servers: [ENV_PHNQ_SERVICE_NATS || DEFAULT_NATS_URI],
-  monitorUrl: ENV_PHNQ_SERVICE_NATS_MONITOR || DEFAULT_NATS_MONITOR_URI,
-  maxReconnectAttempts: -1, // never give up
-  maxConnectAttempts: -1, // never give up
+const getNatsOptions = (nats?: NATSTransportConnectionOptions): NATSTransportConnectionOptions | undefined => {
+  if (nats) {
+    return nats;
+  }
+  if (NATS_URI) {
+    return {
+      servers: [NATS_URI],
+      monitorUrl: NATS_MONITOR_URI,
+      maxReconnectAttempts: -1, // never give up
+      maxConnectAttempts: -1, // never give up
+    };
+  }
+  return undefined;
 };
 
 export interface ServiceInstanceInfo {
@@ -68,7 +72,7 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
   public constructor(domain: D, config: ServiceConfig<T> = {}) {
     this.log = createLogger(`${domain}${config.handlers === undefined ? '.client' : ''}`);
     this.domain = domain;
-    this.config = config;
+    this.config = { ...config, nats: getNatsOptions(config.nats) };
     this.transport = DEFAULT_TRANSPORT;
     this.handlers = Object.freeze({
       ...config.handlers,
@@ -113,7 +117,7 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
   }
 
   private getConnection(): Promise<MessageConnection<ServiceRequestMessage, ServiceResponseMessage>> {
-    const { nats = defaultNatsOptions, signSalt = ENV_PHNQ_SERVICE_SIGN_SALT, responseTimeout } = this.config;
+    const { nats, signSalt = SIGN_SALT, responseTimeout } = this.config;
 
     const domain = this.domain;
 
@@ -121,43 +125,62 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
       this.connection ||
       new Promise<MessageConnection<ServiceRequestMessage, ServiceResponseMessage>>(async (resolve, reject) => {
         try {
-          this.log('Starting service...');
+          if (nats) {
+            this.log('Starting service with NATSTransport...');
+            const subscriptions: Parameters<typeof NATSTransport.create>[1]['subscriptions'] = [this.origin];
 
-          const subscriptions: Parameters<typeof NATSTransport.create>[1]['subscriptions'] = [this.origin];
-
-          if (this.config.handlers) {
-            /**
-             * Load-balancing is achieved by setting the `queue` option to the domain name. This puts
-             * all services of the same domain into a queue group. Messages are then distributed by
-             * NATS to the grouped services randomly. NATS queueing is described here:
-             *
-             *   https://docs.nats.io/nats-concepts/core-nats/queue
-             */
-            subscriptions.push({ subject: domain, options: { queue: domain } });
-          }
-
-          /**
-           * Create a NATS transport.
-           * This configiration deterimines how messages are routed.
-           */
-          this.transport = await NATSTransport.create(
-            { ...nats, name: [domain, this.origin].filter(Boolean).join('.') },
-            {
+            if (this.config.handlers) {
               /**
-               * This service listens for incoming messages on the following subjects:
-               * - `origin` (uuid) messages sent directly to this service instance.
-               * - `domain` (string) messages sent to this service's domain.
-               * - `all-services` messages sent to all services.
-               */
-              subscriptions,
-              /**
-               * Outgoing messages are published to subjects as follows:
-               * - A `request` message is published to the `domain` subject.
-               * - Errors/Anomalies are published to the `origin` subject.
-               * - A `response` message is published to the `origin` subject.
+               * Load-balancing is achieved by setting the `queue` option to the domain name. This puts
+               * all services of the same domain into a queue group. Messages are then distributed by
+               * NATS to the grouped services randomly. NATS queueing is described here:
                *
-               * Note: `origin` refers to the originator of the message conversation.
+               *   https://docs.nats.io/nats-concepts/core-nats/queue
                */
+              subscriptions.push({ subject: domain, options: { queue: domain } });
+            }
+
+            /**
+             * Create a NATS transport.
+             * This configiration deterimines how messages are routed.
+             */
+            this.transport = await NATSTransport.create(
+              { ...nats, name: [domain, this.origin].filter(Boolean).join('.') },
+              {
+                /**
+                 * This service listens for incoming messages on the following subjects:
+                 * - `origin` (uuid) messages sent directly to this service instance.
+                 * - `domain` (string) messages sent to this service's domain.
+                 * - `all-services` messages sent to all services.
+                 */
+                subscriptions,
+                /**
+                 * Outgoing messages are published to subjects as follows:
+                 * - A `request` message is published to the `domain` subject.
+                 * - Errors/Anomalies are published to the `origin` subject.
+                 * - A `response` message is published to the `origin` subject.
+                 *
+                 * Note: `origin` refers to the originator of the message conversation.
+                 */
+                publishSubject: ({ t, p }) => {
+                  switch (t) {
+                    case MessageType.Request:
+                      return (p as ServiceRequestMessage).domain;
+                    case MessageType.Anomaly:
+                    case MessageType.Error:
+                      return ((p as AnomalyMessage['p'] | ErrorMessage['p']).requestPayload as ServiceRequestMessage)
+                        .origin;
+                  }
+                  return (p as ServiceResponseMessage).origin;
+                },
+              },
+            );
+          } else {
+            this.log('Starting service with LocalPubSubTransport...');
+            this.transport = new LocalPubSubTransport<ServiceRequestMessage, ServiceResponseMessage>({
+              /** See above for description of `subscriptions` */
+              subscriptions: [this.origin, this.config.handlers ? domain : undefined].filter(isDefined),
+              /** See above for description of `publishSubject` */
               publishSubject: ({ t, p }) => {
                 switch (t) {
                   case MessageType.Request:
@@ -169,8 +192,8 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
                 }
                 return (p as ServiceResponseMessage).origin;
               },
-            },
-          );
+            });
+          }
 
           this.log('Connected to NATS.');
 
