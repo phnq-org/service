@@ -175,6 +175,7 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
                 },
               },
             );
+            this.log('Connected to NATS.');
           } else {
             this.log('Starting service with LocalPubSubTransport...');
             this.transport = new LocalPubSubTransport<ServiceRequestMessage, ServiceResponseMessage>({
@@ -194,8 +195,6 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
               },
             });
           }
-
-          this.log('Connected to NATS.');
 
           const connection = new MessageConnection<ServiceRequestMessage, ServiceResponseMessage>(this.transport, {
             signSalt,
