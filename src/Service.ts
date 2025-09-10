@@ -59,7 +59,7 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
   private log: Logger;
   private readonly serviceStats = new ServiceStats({ filter: (_, m) => !['ping', 'getStats'].includes(m) });
   private readonly clientStats = new ServiceStats({ filter: (_, m) => m !== 'getStats' });
-  private readonly domain: D;
+  public readonly domain: D;
   private readonly config: ServiceConfig<T>;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
   private connection: Promise<MessageConnection<ServiceRequestMessage, ServiceResponseMessage>>;
