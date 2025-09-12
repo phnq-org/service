@@ -1,10 +1,10 @@
-import ServiceClient, { StandaloneClient } from '../ServiceClient';
-import AuthApi from './AuthApi';
+import ServiceClient, { type StandaloneClient } from "../ServiceClient";
+import type AuthApi from "./AuthApi";
 
-class AuthClient {
-  public static create(): AuthApi['handlers'] & StandaloneClient {
-    return ServiceClient.create<AuthApi>('phnq-auth');
-  }
-}
+const AuthClient = {
+  create(): AuthApi["handlers"] & StandaloneClient {
+    return ServiceClient.create<AuthApi>("phnq-auth");
+  },
+};
 
 export default AuthClient;

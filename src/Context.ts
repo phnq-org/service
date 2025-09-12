@@ -1,8 +1,8 @@
-import { AsyncLocalStorage } from 'async_hooks';
+import { AsyncLocalStorage } from "node:async_hooks";
 
-import { ApiNotificationMessage, NotifyApi } from './api/ApiMessage';
-import { ServiceApi } from './Service';
-import { DefaultClient } from './ServiceClient';
+import type { ApiNotificationMessage, NotifyApi } from "./api/ApiMessage";
+import type { ServiceApi } from "./Service";
+import type { DefaultClient } from "./ServiceClient";
 
 const contextLocalStorage = new AsyncLocalStorage<Context>();
 
@@ -35,9 +35,9 @@ class Context {
    * @param fn
    */
   static apply<T>(data: ContextData, fn: () => Promise<T>): Promise<T>;
-  static apply<T>(data: ContextData, fn?: () => Promise<T>): Promise<T> | void {
+  static apply<T>(data: ContextData, fn?: () => Promise<T>): Promise<T> | undefined {
     if (fn) {
-      return new Promise<T>(resolve => {
+      return new Promise<T>((resolve) => {
         contextLocalStorage.run(new Context(data), () => resolve(fn()));
       });
     } else {
@@ -61,7 +61,9 @@ class Context {
     this.sharedContextData = { originDomain: contextData.originDomain };
   }
 
-  public getClient<T extends ServiceApi<D>, D extends string = T['domain']>(domain: D): T['handlers'] & DefaultClient {
+  public getClient<T extends ServiceApi<D>, D extends string = T["domain"]>(
+    domain: D,
+  ): T["handlers"] & DefaultClient {
     throw new Error(`No client for domain ${domain}`);
   }
 
@@ -75,13 +77,13 @@ class Context {
    */
   public notify<P extends { type: string }>(
     payload: P,
-    recipient?: ApiNotificationMessage['recipient'],
+    recipient?: ApiNotificationMessage["recipient"],
   ): Promise<void> {
     const recip = recipient || (this.connectionId ? { id: this.connectionId } : undefined);
     if (!recip) {
-      throw new Error('No recipient set and could not derive one.');
+      throw new Error("No recipient set and could not derive one.");
     }
-    return this.getClient<NotifyApi>('_phnq-api').notify({
+    return this.getClient<NotifyApi>("_phnq-api").notify({
       recipient: recip,
       payload,
       domain: this.domain,
@@ -117,7 +119,7 @@ class Context {
   }
 
   public set identity(identity: string | undefined) {
-    this.set('identity', identity, true);
+    this.set("identity", identity, true);
   }
 
   public get domain(): string | undefined {

@@ -23,7 +23,7 @@ export interface ApiNotificationMessage extends ApiMessage {
 }
 
 export interface NotifyApi {
-  domain: '_phnq-api';
+  domain: "_phnq-api";
   handlers: {
     notify: (msg: ApiNotificationMessage) => Promise<void>;
   };

@@ -1,26 +1,21 @@
 {
   "name": "@phnq/service",
-  "version": "1.8.2",
+  "version": "2.0.0",
   "description": "Utilities for building microservices systems.",
-  "main": "lib/index.js",
+  "main": "dist/index.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pgostovic/service.git"
   },
   "scripts": {
-    "dist": "tsc --skipLibCheck",
-    "postdist": "ts-node scripts/postdist",
-    "clean": "rimraf dist",
-    "test": "npm run test:local; npm run test:nats",
-    "test:local": "PHNQ_SERVICE_SIGN_SALT=abcd1234 jest --detectOpenHandles --forceExit $EXTRA_JEST_ARGS",
-    "test:nats": "PHNQ_SERVICE_NATS=nats://localhost:${NATS_PORT:=4224} PHNQ_SERVICE_NATS_MONITOR=http://localhost:${NATS_MONITOR_PORT:=8224} PHNQ_SERVICE_SIGN_SALT=abcd1234 jest --detectOpenHandles --forceExit $EXTRA_JEST_ARGS",
-    "test:cci": "EXTRA_JEST_ARGS=--coverage NATS_PORT=4222 NATS_MONITOR_PORT=8222 CCI=1 npm t",
-    "test:log": "PHNQ_MESSAGE_LOG_NATS=1 npm t",
-    "pretest:nats": "if [ \"$CCI\" != \"1\" ]; then docker run -d --name nats_phnq_service_test -p 4224:4222 -p8224:8222 nats; fi",
-    "posttest:nats": "if [ \"$CCI\" != \"1\" ]; then docker stop nats_phnq_service_test; docker rm nats_phnq_service_test; fi",
-    "lint": "tsc --noEmit --skipLibCheck && eslint 'src/**/*.{js,ts,tsx}' --quiet --fix",
-    "release:patch": "npm run clean; npm version patch; npm run dist; cd dist; npm publish",
-    "release:minor": "npm run clean; npm version minor; npm run dist; cd dist; npm publish"
+    "dist": "bun build --production ./src/index.ts --outdir ./dist --target node --packages=external; tsc --project tsconfig.types.json",
+    "clean": "rimraf dist *.tsbuildinfo",
+    "prelint": "tsc -b",
+    "lint": "biome check src",
+    "release": "bun run dist && bun run test && bun publish",
+    "test:nats": "PHNQ_SERVICE_NATS=nats://localhost:${NATS_PORT:=4224} PHNQ_SERVICE_NATS_MONITOR=http://localhost:${NATS_MONITOR_PORT:=8224} PHNQ_SERVICE_SIGN_SALT=abcd1234 bun test",
+    "pretest:nats": "if [ \"$CCI\" != \"1\" ]; then podman run -d --name nats_phnq_service_test -p 4224:4222 -p8224:8222 nats; fi",
+    "posttest:nats": "if [ \"$CCI\" != \"1\" ]; then podman stop nats_phnq_service_test; podman rm nats_phnq_service_test; fi"
   },
   "engines": {
     "node": ">=14"
@@ -29,30 +24,20 @@
   "license": "ISC",
   "dependencies": {
     "@phnq/log": "^1.1.5",
-    "@phnq/message": "^1.14.8",
-    "@types/validator": "^13.1.4",
+    "@phnq/message": "^2.0.0",
     "crypto-random-string": "^3.3.1",
     "md5": "^2.3.0",
     "nats": "^2.9.1",
     "node-fetch": "^3.3.2",
-    "uuid": "^9.0.0",
-    "validator": "^13.6.0"
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.7",
+    "@biomejs/biome": "^2.2.4",
+    "@types/bun": "^1.2.21",
     "@types/md5": "^2.3.2",
     "@types/uuid": "^9.0.0",
-    "@typescript-eslint/eslint-plugin": "^4.26.1",
-    "@typescript-eslint/parser": "^4.26.1",
-    "eslint": "^7.28.0",
-    "eslint-config-prettier": "^6.15.0",
-    "eslint-plugin-prettier": "^3.4.0",
-    "eslint-plugin-simple-import-sort": "^5.0.3",
-    "jest": "^29.7.0",
-    "prettier": "^2.3.1",
     "rimraf": "^3.0.2",
-    "ts-jest": "^29.1.1",
     "ts-node": "^10.9.1",
-    "typescript": "^4.3.2"
+    "typescript": "^5.9.2"
   }
 }

@@ -1,4 +1,4 @@
-import { ContextData } from './Context';
+import type { ContextData } from "./Context";
 
 interface ServiceMessageBase {
   origin: string; // service that initiated the conversation (req/res chain)

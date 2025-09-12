@@ -1,4 +1,4 @@
-import ApiClient from './api/ApiClient';
-import { AuthResult } from './auth/AuthApi';
+import ApiClient from "./api/ApiClient";
+import type { AuthResult } from "./auth/AuthApi";
 
-export { ApiClient, AuthResult };
+export { ApiClient, type AuthResult };

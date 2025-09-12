@@ -1,10 +1,10 @@
-import Context from '../../Context';
-import { Handler } from '../../Service';
-import ServiceError from '../../ServiceError';
-import AuthApi from '../AuthApi';
-import AuthService from '../AuthService';
+import Context from "../../Context";
+import type { Handler } from "../../Service";
+import ServiceError from "../../ServiceError";
+import type AuthApi from "../AuthApi";
+import type AuthService from "../AuthService";
 
-const authenticate: Handler<AuthApi, 'authenticate'> = async (authReq, service) => {
+const authenticate: Handler<AuthApi, "authenticate"> = async (authReq, service) => {
   const authService = service as AuthService;
   if (authService.onAuthenticate) {
     try {
@@ -14,12 +14,12 @@ const authenticate: Handler<AuthApi, 'authenticate'> = async (authReq, service) 
     } catch (err) {
       Context.current.identity = undefined;
       throw new ServiceError({
-        type: 'unauthorized',
+        type: "unauthorized",
         message: (err as Error).message || String(err),
       });
     }
   }
-  throw new Error('No onAuthenticate handler configured.');
+  throw new Error("No onAuthenticate handler configured.");
 };
 
 export default authenticate;

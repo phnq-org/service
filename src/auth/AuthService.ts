@@ -1,8 +1,8 @@
-import Service, { ServiceConfig } from '../Service';
-import AuthApi from './AuthApi';
-import authenticate from './handlers/authenticate';
+import Service, { type ServiceConfig } from "../Service";
+import type AuthApi from "./AuthApi";
+import authenticate from "./handlers/authenticate";
 
-interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, 'handlers'> {
+interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, "handlers"> {
   /**
    * Setting this callback will enable authentication by delegating responsibility
    * to the application. The `authReq` argument is the payload of the `authenticate`
@@ -25,10 +25,10 @@ interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, 'handlers'> {
 }
 
 class AuthService extends Service<AuthApi> {
-  public readonly onAuthenticate: AuthServiceConfig['onAuthenticate'];
+  public readonly onAuthenticate: AuthServiceConfig["onAuthenticate"];
 
   public constructor(config: AuthServiceConfig) {
-    super('phnq-auth', { ...config, handlers: { authenticate } });
+    super("phnq-auth", { ...config, handlers: { authenticate } });
     this.onAuthenticate = config.onAuthenticate;
   }
 }

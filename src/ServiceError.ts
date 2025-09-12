@@ -1,5 +1,5 @@
 interface ServiceErrorOptions {
-  type: 'unauthorized' | 'server-error' | 'bad-request' | 'anomaly';
+  type: "unauthorized" | "server-error" | "bad-request" | "anomaly";
   message?: string;
 }
 
@@ -13,7 +13,7 @@ class ServiceError extends Error {
       return err;
     }
     return new ServiceError({
-      type: 'server-error',
+      type: "server-error",
       message: (err as Error).message || String(err),
     });
   }
@@ -32,7 +32,7 @@ class ServiceError extends Error {
     Object.setPrototypeOf(this, ServiceError.prototype);
   }
 
-  get type(): ServiceErrorOptions['type'] {
+  get type(): ServiceErrorOptions["type"] {
     return this.options.type;
   }
 

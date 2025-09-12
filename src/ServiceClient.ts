@@ -1,5 +1,5 @@
-import Service, { ServiceApi, ServiceConfig } from './Service';
-import { HandlerStatsReport, Stats } from './ServiceStats';
+import Service, { type ServiceApi, type ServiceConfig } from "./Service";
+import type { HandlerStatsReport, Stats } from "./ServiceStats";
 
 export interface DefaultClient {
   ping(): Promise<string>;
@@ -18,11 +18,14 @@ export interface StandaloneClient extends DefaultClient {
   disconnect(): Promise<void>;
 }
 
-export type ClientConfig<T extends ServiceApi<D>, D extends string = T['domain']> = Omit<ServiceConfig<T>, 'handlers'>;
+export type ClientConfig<T extends ServiceApi<D>, D extends string = T["domain"]> = Omit<
+  ServiceConfig<T>,
+  "handlers"
+>;
 
 const clientCache = new Map<string, StandaloneClient>();
 
-class ServiceClient {
+const ServiceClient = {
   /**
    * Create a client for the given service domain.
    *
@@ -30,12 +33,12 @@ class ServiceClient {
    * @param config
    * @returns
    */
-  public static create<T extends ServiceApi<D>, D extends string = T['domain']>(
+  create<T extends ServiceApi<D>, D extends string = T["domain"]>(
     domain: D,
     config?: ClientConfig<T>,
-  ): T['handlers'] & StandaloneClient {
-    return new Service<T>(domain, config).getClient() as T['handlers'] & StandaloneClient;
-  }
+  ): T["handlers"] & StandaloneClient {
+    return new Service<T>(domain, config).getClient() as T["handlers"] & StandaloneClient;
+  },
 
   /**
    * Get a cached client for the given service domain. Create it if it doesn't exist.
@@ -44,16 +47,19 @@ class ServiceClient {
    * @param config
    * @returns
    */
-  public static get<T extends ServiceApi<D>, D extends string = T['domain']>(
+  get<T extends ServiceApi<D>, D extends string = T["domain"]>(
     domain: D,
     config?: ClientConfig<T>,
-  ): T['handlers'] & StandaloneClient {
+  ): T["handlers"] & StandaloneClient {
     const key = `${domain}:${JSON.stringify(config)}`;
     if (!clientCache.has(key)) {
-      clientCache.set(key, new Service<T>(domain, config).getClient() as T['handlers'] & StandaloneClient);
+      clientCache.set(
+        key,
+        new Service<T>(domain, config).getClient() as T["handlers"] & StandaloneClient,
+      );
     }
-    return clientCache.get(key) as T['handlers'] & StandaloneClient;
-  }
-}
+    return clientCache.get(key) as T["handlers"] & StandaloneClient;
+  },
+};
 
 export default ServiceClient;

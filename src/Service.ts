@@ -1,19 +1,33 @@
-import { createLogger } from '@phnq/log';
-import { Logger } from '@phnq/log/logger';
-import { Anomaly, AnomalyMessage, ErrorMessage, MessageConnection, MessageTransport, MessageType } from '@phnq/message';
-import { LocalPubSubTransport } from '@phnq/message/transports/LocalPubSubTransport';
-import { NATSTransport, NATSTransportConnectionOptions } from '@phnq/message/transports/NATSTransport';
-import { ConnectionOptions } from 'nats';
-import { v4 as uuid } from 'uuid';
+import assert from "node:assert";
+import { createLogger } from "@phnq/log";
+import type { Logger } from "@phnq/log/logger";
+import {
+  Anomaly,
+  type AnomalyMessage,
+  type ErrorMessage,
+  LocalPubSubTransport,
+  MessageConnection,
+  type MessageTransport,
+  MessageType,
+  NATSTransport,
+  type NATSTransportConnectionOptions,
+} from "@phnq/message";
+import type { ConnectionOptions } from "nats";
+import { v4 as uuid } from "uuid";
+import Context from "./Context";
+import { NATS_MONITOR_URI, NATS_URI, SIGN_SALT } from "./config";
+import ServiceClient, { type DefaultClient } from "./ServiceClient";
+import ServiceError from "./ServiceError";
+import type {
+  ServiceMessage,
+  ServiceRequestMessage,
+  ServiceResponseMessage,
+} from "./ServiceMessage";
+import ServiceStats, { type HandlerStatsReport, type Stats } from "./ServiceStats";
 
-import { NATS_MONITOR_URI, NATS_URI, SIGN_SALT } from './config';
-import Context from './Context';
-import ServiceClient, { DefaultClient } from './ServiceClient';
-import ServiceError from './ServiceError';
-import { ServiceMessage, ServiceRequestMessage, ServiceResponseMessage } from './ServiceMessage';
-import ServiceStats, { HandlerStatsReport, Stats } from './ServiceStats';
-
-const getNatsOptions = (nats?: NATSTransportConnectionOptions): NATSTransportConnectionOptions | undefined => {
+const getNatsOptions = (
+  nats?: NATSTransportConnectionOptions,
+): NATSTransportConnectionOptions | undefined => {
   if (nats) {
     return nats;
   }
@@ -40,25 +54,28 @@ export interface ServiceApi<D extends string> {
   };
 }
 
-export interface ServiceConfig<T extends ServiceApi<D>, D extends string = T['domain']> {
+export interface ServiceConfig<T extends ServiceApi<D>, D extends string = T["domain"]> {
   nats?: ConnectionOptions & { monitorUrl?: string };
   signSalt?: string;
   responseTimeout?: number;
   handlers?: {
-    [H in keyof T['handlers']]: Handler<T, H, D>;
+    [H in keyof T["handlers"]]: Handler<T, H, D>;
   };
 }
 
-export type Handler<T extends ServiceApi<D>, H extends keyof T['handlers'], D extends string = T['domain']> = (
-  arg: Parameters<T['handlers'][H]>[0],
-  service: Service<T>,
-) => ReturnType<T['handlers'][H]>;
+export type Handler<
+  T extends ServiceApi<D>,
+  H extends keyof T["handlers"],
+  D extends string = T["domain"],
+> = (arg: Parameters<T["handlers"][H]>[0], service: Service<T>) => ReturnType<T["handlers"][H]>;
 
-class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
-  public readonly origin = uuid().replace(/[^\w]/g, '');
+class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
+  public readonly origin = uuid().replace(/[^\w]/g, "");
   private log: Logger;
-  private readonly serviceStats = new ServiceStats({ filter: (_, m) => !['ping', 'getStats'].includes(m) });
-  private readonly clientStats = new ServiceStats({ filter: (_, m) => m !== 'getStats' });
+  private readonly serviceStats = new ServiceStats({
+    filter: (_, m) => !["ping", "getStats"].includes(m),
+  });
+  private readonly clientStats = new ServiceStats({ filter: (_, m) => m !== "getStats" });
   public readonly domain: D;
   private readonly config: ServiceConfig<T>;
   private transport: MessageTransport<ServiceRequestMessage, ServiceResponseMessage>;
@@ -70,13 +87,13 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
   private connected = true;
 
   public constructor(domain: D, config: ServiceConfig<T> = {}) {
-    this.log = createLogger(`${domain}${config.handlers === undefined ? '.client' : ''}`);
+    this.log = createLogger(`${domain}${config.handlers === undefined ? ".client" : ""}`);
     this.domain = domain;
     this.config = { ...config, nats: getNatsOptions(config.nats) };
     this.transport = DEFAULT_TRANSPORT;
     this.handlers = Object.freeze({
       ...config.handlers,
-      ping: async () => 'pong',
+      ping: async () => "pong",
       getStats: async () => this.stats,
     });
     this.connection = this.getConnection();
@@ -102,9 +119,12 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
 
   public async getPeers(): Promise<ServiceInstanceInfo[]> {
     if (this.transport instanceof NATSTransport) {
-      const connectionNames = (await this.transport.getConnections()).map(c => c.name).filter(isDefined);
-      return connectionNames.map(name => {
-        const [origin, domain = null] = name.split('.').reverse();
+      const connectionNames = (await this.transport.getConnections())
+        .map((c) => c.name)
+        .filter(isDefined);
+      return connectionNames.map((name) => {
+        const [origin, domain = null] = name.split(".").reverse();
+        assert(origin);
         return { domain, origin };
       });
     }
@@ -113,107 +133,110 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
 
   public async getPeerStats(): Promise<Stats[]> {
     const peers = await this.getPeers();
-    return Promise.all(peers.map(peer => ServiceClient.create(peer.origin).getStats()));
+    return Promise.all(peers.map((peer) => ServiceClient.create(peer.origin).getStats()));
   }
 
-  private getConnection(): Promise<MessageConnection<ServiceRequestMessage, ServiceResponseMessage>> {
+  private async getConnection(): Promise<
+    MessageConnection<ServiceRequestMessage, ServiceResponseMessage>
+  > {
     const { nats, signSalt = SIGN_SALT, responseTimeout } = this.config;
 
     const domain = this.domain;
 
-    return (
-      this.connection ||
-      new Promise<MessageConnection<ServiceRequestMessage, ServiceResponseMessage>>(async (resolve, reject) => {
-        try {
-          if (nats) {
-            this.log('Starting service with NATSTransport...');
-            const subscriptions: Parameters<typeof NATSTransport.create>[1]['subscriptions'] = [this.origin];
+    if (nats) {
+      this.log("Starting service with NATSTransport...");
+      const subscriptions: Parameters<typeof NATSTransport.create>[1]["subscriptions"] = [
+        this.origin,
+      ];
 
-            if (this.config.handlers) {
-              /**
-               * Load-balancing is achieved by setting the `queue` option to the domain name. This puts
-               * all services of the same domain into a queue group. Messages are then distributed by
-               * NATS to the grouped services randomly. NATS queueing is described here:
-               *
-               *   https://docs.nats.io/nats-concepts/core-nats/queue
-               */
-              subscriptions.push({ subject: domain, options: { queue: domain } });
+      if (this.config.handlers) {
+        /**
+         * Load-balancing is achieved by setting the `queue` option to the domain name. This puts
+         * all services of the same domain into a queue group. Messages are then distributed by
+         * NATS to the grouped services randomly. NATS queueing is described here:
+         *
+         *   https://docs.nats.io/nats-concepts/core-nats/queue
+         */
+        subscriptions.push({ subject: domain, options: { queue: domain } });
+      }
+
+      /**
+       * Create a NATS transport.
+       * This configiration deterimines how messages are routed.
+       */
+      this.transport = await NATSTransport.create(
+        { ...nats, name: [domain, this.origin].filter(Boolean).join(".") },
+        {
+          /**
+           * This service listens for incoming messages on the following subjects:
+           * - `origin` (uuid) messages sent directly to this service instance.
+           * - `domain` (string) messages sent to this service's domain.
+           * - `all-services` messages sent to all services.
+           */
+          subscriptions,
+          /**
+           * Outgoing messages are published to subjects as follows:
+           * - A `request` message is published to the `domain` subject.
+           * - Errors/Anomalies are published to the `origin` subject.
+           * - A `response` message is published to the `origin` subject.
+           *
+           * Note: `origin` refers to the originator of the message conversation.
+           */
+          publishSubject: ({ t, p }) => {
+            switch (t) {
+              case MessageType.Request:
+                return (p as ServiceRequestMessage).domain;
+              case MessageType.Anomaly:
+              case MessageType.Error:
+                return (
+                  (p as AnomalyMessage["p"] | ErrorMessage["p"])
+                    .requestPayload as ServiceRequestMessage
+                ).origin;
             }
-
-            /**
-             * Create a NATS transport.
-             * This configiration deterimines how messages are routed.
-             */
-            this.transport = await NATSTransport.create(
-              { ...nats, name: [domain, this.origin].filter(Boolean).join('.') },
-              {
-                /**
-                 * This service listens for incoming messages on the following subjects:
-                 * - `origin` (uuid) messages sent directly to this service instance.
-                 * - `domain` (string) messages sent to this service's domain.
-                 * - `all-services` messages sent to all services.
-                 */
-                subscriptions,
-                /**
-                 * Outgoing messages are published to subjects as follows:
-                 * - A `request` message is published to the `domain` subject.
-                 * - Errors/Anomalies are published to the `origin` subject.
-                 * - A `response` message is published to the `origin` subject.
-                 *
-                 * Note: `origin` refers to the originator of the message conversation.
-                 */
-                publishSubject: ({ t, p }) => {
-                  switch (t) {
-                    case MessageType.Request:
-                      return (p as ServiceRequestMessage).domain;
-                    case MessageType.Anomaly:
-                    case MessageType.Error:
-                      return ((p as AnomalyMessage['p'] | ErrorMessage['p']).requestPayload as ServiceRequestMessage)
-                        .origin;
-                  }
-                  return (p as ServiceResponseMessage).origin;
-                },
-              },
-            );
-            this.log('Connected to NATS.');
-          } else {
-            this.log('Starting service with LocalPubSubTransport...');
-            this.transport = new LocalPubSubTransport<ServiceRequestMessage, ServiceResponseMessage>({
-              /** See above for description of `subscriptions` */
-              subscriptions: [this.origin, this.config.handlers ? domain : undefined].filter(isDefined),
-              /** See above for description of `publishSubject` */
-              publishSubject: ({ t, p }) => {
-                switch (t) {
-                  case MessageType.Request:
-                    return (p as ServiceRequestMessage).domain;
-                  case MessageType.Anomaly:
-                  case MessageType.Error:
-                    return ((p as AnomalyMessage['p'] | ErrorMessage['p']).requestPayload as ServiceRequestMessage)
-                      .origin;
-                }
-                return (p as ServiceResponseMessage).origin;
-              },
-            });
+            return (p as ServiceResponseMessage).origin;
+          },
+        },
+      );
+      this.log("Connected to NATS.");
+    } else {
+      this.log("Starting service with LocalPubSubTransport...");
+      this.transport = new LocalPubSubTransport<ServiceRequestMessage, ServiceResponseMessage>({
+        /** See above for description of `subscriptions` */
+        subscriptions: [this.origin, this.config.handlers ? domain : undefined].filter(isDefined),
+        /** See above for description of `publishSubject` */
+        publishSubject: ({ t, p }) => {
+          switch (t) {
+            case MessageType.Request:
+              return (p as ServiceRequestMessage).domain;
+            case MessageType.Anomaly:
+            case MessageType.Error:
+              return (
+                (p as AnomalyMessage["p"] | ErrorMessage["p"])
+                  .requestPayload as ServiceRequestMessage
+              ).origin;
           }
+          return (p as ServiceResponseMessage).origin;
+        },
+      });
+    }
 
-          const connection = new MessageConnection<ServiceRequestMessage, ServiceResponseMessage>(this.transport, {
-            signSalt,
-            marshalPayload: p => this.marshalPayload(p),
-            unmarshalPayload: p => this.unmarshalPayload(p),
-          });
-
-          if (responseTimeout !== undefined) {
-            connection.responseTimeout = responseTimeout;
-          }
-
-          connection.onReceive = message => Context.apply(message.contextData, () => this.handleRequest(message));
-
-          resolve(connection);
-        } catch (err) {
-          reject(err);
-        }
-      })
+    const connection = new MessageConnection<ServiceRequestMessage, ServiceResponseMessage>(
+      this.transport,
+      {
+        signSalt,
+        marshalPayload: (p) => this.marshalPayload(p),
+        unmarshalPayload: (p) => this.unmarshalPayload(p),
+      },
     );
+
+    if (responseTimeout !== undefined) {
+      connection.responseTimeout = responseTimeout;
+    }
+
+    connection.onReceive = (message) =>
+      Context.apply(message.contextData, () => this.handleRequest(message));
+
+    return connection;
   }
 
   public async connect(): Promise<void> {
@@ -241,12 +264,12 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
    */
   public async testLatency(): Promise<number> {
     if (!this.domain) {
-      throw new Error('testLatency requires a configured domain');
+      throw new Error("testLatency requires a configured domain");
     }
     const client = this.getClient();
     const start = process.hrtime.bigint();
-    if ((await client.ping()) !== 'pong') {
-      throw new Error('ping/pong failed');
+    if ((await client.ping()) !== "pong") {
+      throw new Error("ping/pong failed");
     }
     return Number(process.hrtime.bigint() - start) / 1_000_000;
   }
@@ -264,29 +287,29 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
    * @param domain
    * @returns
    */
-  public getClient(): T['handlers'] & DefaultClient {
+  public getClient(): T["handlers"] & DefaultClient {
     const { clientStats, domain } = this;
     return new Proxy(
       {},
       {
         get: (_, method: string) => {
-          if (method === 'isConnected') {
+          if (method === "isConnected") {
             return this.isConnected;
-          } else if (method === 'stats') {
+          } else if (method === "stats") {
             return clientStats.stats;
           }
 
           const start = performance.now();
 
           return async (payload: unknown) => {
-            if (method === 'disconnect') {
+            if (method === "disconnect") {
               await this.disconnect();
               return;
             }
 
             const connection = await this.connection;
 
-            if (method === 'connect') {
+            if (method === "connect") {
               // Just return if 'connect' is called since connect() is invoked above.
               return;
             }
@@ -300,11 +323,11 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
                   payload,
                   contextData: Context.current.data,
                 },
-                method !== 'checkIn',
+                method !== "checkIn",
               );
 
               if (
-                typeof response === 'object' &&
+                typeof response === "object" &&
                 (response as AsyncIterableIterator<ServiceResponseMessage>)[Symbol.asyncIterator]
               ) {
                 const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
@@ -317,7 +340,10 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
                     Context.current.merge(sharedContextData);
                     yield payload;
                   }
-                  clientStats.record(domain, method, { time: performance.now() - start, numResponses });
+                  clientStats.record(domain, method, {
+                    time: performance.now() - start,
+                    numResponses,
+                  });
                 })();
               } else if (response) {
                 const { payload, sharedContextData } = response as ServiceResponseMessage;
@@ -328,12 +354,12 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
             } else {
               clientStats.record(domain, method, { time: performance.now() - start, error: true });
               // This should never happen.
-              this.log.error('No connection');
+              this.log.error("No connection");
             }
           };
         },
       },
-    ) as T['handlers'] & DefaultClient;
+    ) as T["handlers"] & DefaultClient;
   }
 
   private async handleRequest({
@@ -341,7 +367,9 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
     method,
     origin,
     payload,
-  }: ServiceRequestMessage): Promise<ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>> {
+  }: ServiceRequestMessage): Promise<
+    ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>
+  > {
     const start = process.hrtime.bigint();
 
     const stats = this.serviceStats;
@@ -349,10 +377,14 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
     const handler = this.handlers[method];
     if (handler) {
       try {
-        Context.current.getClient = <T extends ServiceApi<D>, D extends string = T['domain']>(domain: D) =>
-          ServiceClient.create<T>(domain);
+        Context.current.getClient = <T extends ServiceApi<D>, D extends string = T["domain"]>(
+          domain: D,
+        ) => ServiceClient.create<T>(domain);
         const response = await handler(payload, this);
-        if (typeof response === 'object' && (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]) {
+        if (
+          typeof response === "object" &&
+          (response as AsyncIterableIterator<ServiceMessage>)[Symbol.asyncIterator]
+        ) {
           const context = Context.current;
           return (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
             Context.apply(context.data);
@@ -382,10 +414,13 @@ class Service<T extends ServiceApi<D>, D extends string = T['domain']> {
           };
         }
       } catch (err) {
-        stats.record(domain, method, { time: Number(process.hrtime.bigint() - start) / 1_000_000, error: true });
+        stats.record(domain, method, {
+          time: Number(process.hrtime.bigint() - start) / 1_000_000,
+          error: true,
+        });
         this.log.error(`Error handling request [${domain}.${method}]`).stack(err);
 
-        if (err instanceof ServiceError && err.type !== 'server-error') {
+        if (err instanceof ServiceError && err.type !== "server-error") {
           throw new Anomaly(err.message, err.payload);
         }
 
@@ -410,7 +445,8 @@ const DEFAULT_TRANSPORT = {
   },
 };
 
-const isDefined = <T = unknown>(val: T | undefined | null): val is T => val !== undefined && val !== null;
+const isDefined = <T = unknown>(val: T | undefined | null): val is T =>
+  val !== undefined && val !== null;
 
 // const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 

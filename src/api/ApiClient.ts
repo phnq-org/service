@@ -1,27 +1,26 @@
-import { createLogger } from '@phnq/log';
-import { Anomaly } from '@phnq/message';
-import { WebSocketMessageClient } from '@phnq/message/WebSocketMessageClient';
+import { createLogger } from "@phnq/log";
+import { Anomaly, WebSocketMessageClient } from "@phnq/message";
 
-import AuthApi from '../auth/AuthApi';
-import { API_SERVICE_DOMAIN } from '../domains';
-import { ServiceApi } from '../Service';
-import { StandaloneClient } from '../ServiceClient';
-import ServiceError from '../ServiceError';
-import { ApiRequestMessage, ApiResponseMessage } from './ApiMessage';
+import type AuthApi from "../auth/AuthApi";
+import { API_SERVICE_DOMAIN } from "../domains";
+import type { ServiceApi } from "../Service";
+import type { StandaloneClient } from "../ServiceClient";
+import ServiceError from "../ServiceError";
+import type { ApiRequestMessage, ApiResponseMessage } from "./ApiMessage";
 
-const log = createLogger('ApiClient');
+const log = createLogger("ApiClient");
 
 interface ApiRequestEvent {
-  type: 'request';
+  type: "request";
 }
 
 interface ApiResponseEvent {
-  type: 'response';
+  type: "response";
   req: ApiRequestEvent;
 }
 
 interface ApiErrorEvent {
-  type: 'error';
+  type: "error";
   req: ApiRequestEvent;
   err: ServiceError;
 }
@@ -33,7 +32,7 @@ type ApiClientEvent = {
   ts: number;
 } & (ApiResponseEvent | ApiRequestEvent | ApiErrorEvent);
 
-const handlers: Record<ApiClientEvent['type'], ((event: ApiClientEvent) => void)[]> = {
+const handlers: Record<ApiClientEvent["type"], ((event: ApiClientEvent) => void)[]> = {
   request: [],
   response: [],
   error: [],
@@ -44,22 +43,22 @@ const emit = <T extends ApiClientEvent>(event: T): T => {
     try {
       handler(event);
     } catch (err) {
-      log.error('Error in API client event handler:', err);
+      log.error("Error in API client event handler:", err);
     }
   }
   return event;
 };
 
-class ApiClient {
-  public static on<T extends ApiClientEvent['type']>(
+const ApiClient = {
+  on<T extends ApiClientEvent["type"]>(
     eventType: T,
     fn: (event: ApiClientEvent & { type: T }) => void,
   ): (event: ApiClientEvent & { type: T }) => void {
     handlers[eventType].push(fn as never);
     return fn;
-  }
+  },
 
-  public static off<T extends ApiClientEvent['type']>(
+  off<T extends ApiClientEvent["type"]>(
     eventType: T,
     fn: (
       event: ApiClientEvent & {
@@ -67,32 +66,38 @@ class ApiClient {
       },
     ) => void,
   ): void {
-    handlers[eventType] = handlers[eventType].filter(h => h !== fn);
-  }
+    handlers[eventType] = handlers[eventType].filter((h) => h !== fn);
+  },
 
-  public static createAuthClient(url: string): AuthApi['handlers'] & Omit<StandaloneClient, 'stats' | 'getStats'> {
-    return this.create<AuthApi>('phnq-auth', url);
-  }
+  createAuthClient(
+    url: string,
+  ): AuthApi["handlers"] & Omit<StandaloneClient, "stats" | "getStats"> {
+    return this.create<AuthApi>("phnq-auth", url);
+  },
 
-  public static create<
+  create<
     T extends ServiceApi<D>,
     N extends { type: string } | undefined = undefined,
-    D extends string = T['domain'],
-  >(domain: D, url: string, onNotify?: (msg: N) => void): T['handlers'] & Omit<StandaloneClient, 'stats' | 'getStats'> {
+    D extends string = T["domain"],
+  >(
+    domain: D,
+    url: string,
+    onNotify?: (msg: N) => void,
+  ): T["handlers"] & Omit<StandaloneClient, "stats" | "getStats"> {
     let wsClient: WebSocketMessageClient<ApiRequestMessage, ApiResponseMessage> | undefined;
     return new Proxy(
       {},
       {
         get: (_, method: string) => {
-          if (method === 'isConnected') {
-            return wsClient !== undefined && wsClient.isOpen();
-          } else if (['stats', 'getStats'].includes(method)) {
+          if (method === "isConnected") {
+            return wsClient?.isOpen();
+          } else if (["stats", "getStats"].includes(method)) {
             throw new Error(`Method not available in client: ${method}`);
           }
 
           return async (payload: unknown) => {
             const req = emit({
-              type: 'request',
+              type: "request",
               domain,
               method,
               payload,
@@ -100,27 +105,31 @@ class ApiClient {
             });
 
             try {
-              if (method === 'disconnect') {
-                if (wsClient !== undefined && wsClient.isOpen()) {
+              if (method === "disconnect") {
+                if (wsClient?.isOpen()) {
                   await wsClient.close();
                 }
                 return;
               }
 
               if (!wsClient) {
-                wsClient = WebSocketMessageClient.create<ApiRequestMessage, ApiResponseMessage>(url);
+                wsClient = WebSocketMessageClient.create<ApiRequestMessage, ApiResponseMessage>(
+                  url,
+                );
 
                 wsClient.addReceiveHandler(async ({ domain: notifyDomain, method, payload }) => {
                   if (onNotify && [domain, API_SERVICE_DOMAIN].includes(notifyDomain)) {
                     switch (method) {
-                      case 'notify':
-                        return onNotify(payload as N);
+                      case "notify":
+                        onNotify(payload as N);
+                        return undefined;
                     }
                   }
+                  return undefined;
                 });
               }
 
-              if (method === 'connect') {
+              if (method === "connect") {
                 // connect is handled lazily in WebSocketMessageClient.
                 return;
               }
@@ -128,14 +137,14 @@ class ApiClient {
               const response = await wsClient.request({ domain, method, payload });
 
               if (
-                typeof response === 'object' &&
+                typeof response === "object" &&
                 (response as AsyncIterableIterator<ApiResponseMessage>)[Symbol.asyncIterator]
               ) {
                 const responseIter = response as AsyncIterableIterator<ApiResponseMessage>;
                 return (async function* () {
                   for await (const { payload } of responseIter) {
                     emit({
-                      type: 'response',
+                      type: "response",
                       domain,
                       method,
                       payload,
@@ -147,7 +156,7 @@ class ApiClient {
                 })();
               } else {
                 emit({
-                  type: 'response',
+                  type: "response",
                   domain,
                   method,
                   payload: (response as ApiResponseMessage).payload,
@@ -161,12 +170,13 @@ class ApiClient {
               const serviceError =
                 err instanceof Anomaly
                   ? err.info
-                    ? ServiceError.fromPayload(err.info) ?? new ServiceError({ type: 'anomaly', message: err.message })
-                    : new ServiceError({ type: 'anomaly', message: err.message })
+                    ? (ServiceError.fromPayload(err.info) ??
+                      new ServiceError({ type: "anomaly", message: err.message }))
+                    : new ServiceError({ type: "anomaly", message: err.message })
                   : ServiceError.fromError(err);
 
               emit({
-                type: 'error',
+                type: "error",
                 domain,
                 method,
                 payload: serviceError,
@@ -180,8 +190,8 @@ class ApiClient {
           };
         },
       },
-    ) as T['handlers'] & StandaloneClient;
-  }
-}
+    ) as T["handlers"] & StandaloneClient;
+  },
+};
 
 export default ApiClient;

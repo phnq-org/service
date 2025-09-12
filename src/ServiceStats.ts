@@ -34,7 +34,11 @@ class ServiceStats {
     this.filter = config?.filter || (() => true);
   }
 
-  record(domain: string, method: string, { time, error = false, numResponses = 1 }: HandlerStatsRecord): void {
+  record(
+    domain: string,
+    method: string,
+    { time, error = false, numResponses = 1 }: HandlerStatsRecord,
+  ): void {
     if (!this.filter(domain, method)) {
       return;
     }
@@ -56,13 +60,15 @@ class ServiceStats {
     const stats: Record<string, HandlerStatsReport> = {};
     for (const statsKey in this.statsData) {
       const s = this.statsData[statsKey];
-      stats[statsKey] = {
-        invocations: s.invocations,
-        avgTime: s.totalTime / s.invocations,
-        errors: s.errors,
-        errorRate: s.errors / s.invocations,
-        avgResponseCount: s.totalResponseCount / s.invocations,
-      };
+      if (s) {
+        stats[statsKey] = {
+          invocations: s.invocations,
+          avgTime: s.totalTime / s.invocations,
+          errors: s.errors,
+          errorRate: s.errors / s.invocations,
+          avgResponseCount: s.totalResponseCount / s.invocations,
+        };
+      }
     }
     return stats;
   }
