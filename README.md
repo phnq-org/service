@@ -1,7 +1,5 @@
 # @phnq/service
 
-[![CircleCI](https://circleci.com/gh/pgostovic/message.svg?style=svg)](https://circleci.com/gh/pgostovic/service)
-
 [![npm version](https://badge.fury.io/js/%40phnq%2Fservice.svg)](https://badge.fury.io/js/%40phnq%2Fservice)
 
 > TL;DR - jump to [Getting Started](#getting-started) for a barebones example.
