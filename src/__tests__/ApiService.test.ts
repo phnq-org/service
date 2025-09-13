@@ -169,7 +169,7 @@ describe("ApiService", () => {
     expect(await fruitWsClient.ping()).toBe("pong");
   });
 
-  it.only("calls service method from another service", async () => {
+  it("calls service method from another service", async () => {
     expect(await fruitWsClient.getKinds()).toStrictEqual(["apple", "orange", "pear"]);
   });
 
