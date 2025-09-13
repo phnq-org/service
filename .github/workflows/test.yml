@@ -27,4 +27,4 @@ jobs:
         run: bun install
 
       - name: Test
-        run: bun test; CI=1 test:nats
+        run: bun test; CI=1 bun test:nats
