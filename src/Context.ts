@@ -26,7 +26,6 @@ export interface SessionContext {
   connectionId: string;
   langs: string[];
   identity: string;
-  num: number;
 }
 
 class Context<R extends RequestContext, S extends SessionContext> {
@@ -86,11 +85,11 @@ class Context<R extends RequestContext, S extends SessionContext> {
     }
   }
 
-  public setRequest<K extends keyof R>(key: K, val: R[K] | undefined): void {
+  public setRequest<K extends keyof R>(key: K, val: R[K] | null): void {
     this._requestContext = { ...this._requestContext, [key]: val };
   }
 
-  public setSession<K extends keyof S>(key: K, val: S[K] | undefined): void {
+  public setSession<K extends keyof S>(key: K, val: S[K] | null): void {
     this._sessionContext = { ...(this._sessionContext ?? {}), [key]: val } as Partial<S>;
   }
 
