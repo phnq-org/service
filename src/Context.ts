@@ -114,10 +114,16 @@ class Context<R extends RequestContext, S extends SessionContext> {
   }
 }
 
+export interface ContextFactory<R extends RequestContext, S extends SessionContext> {
+  apply(r: Partial<R>, s: Partial<S>): void;
+  apply<T>(r: Partial<R>, s: Partial<S>, fn: () => Promise<T>): Promise<T>;
+  current: Context<R, S>;
+}
+
 export const createContextFactory = <
   R extends RequestContext = RequestContext,
   S extends SessionContext = SessionContext,
->() => {
+>(): ContextFactory<R, S> => {
   function apply(r: Partial<R>, s: Partial<S>): void;
   function apply<T>(r: Partial<R>, s: Partial<S>, fn: () => Promise<T>): Promise<T>;
   function apply<T>(r: Partial<R>, s: Partial<S>, fn?: () => Promise<T>): Promise<T> | undefined {
