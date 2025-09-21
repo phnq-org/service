@@ -1,10 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-
 import type { ApiNotificationMessage, NotifyApi } from "./api/ApiMessage";
 import type { ServiceApi } from "./Service";
 import type { DefaultClient } from "./ServiceClient";
 
-const contextLocalStorage = new AsyncLocalStorage<Context>();
+const contextLocalStorage = new AsyncLocalStorage<Context<RequestContext, SessionContext>>();
 
 export type Serializable =
   | string
@@ -13,52 +12,38 @@ export type Serializable =
   | null
   | undefined
   | Serializable[]
-  | { [key: string]: Serializable };
+  | SerializableObject;
 
-export interface ContextData {
-  originDomain?: string;
-  connectionId?: string;
-  identity?: string;
-  langs?: string[];
+interface SerializableObject {
   [key: string]: Serializable;
 }
 
-class Context {
-  /**
-   * Apply the given context data to the current execution context.
-   * @param data
-   */
-  static apply(data: ContextData): void;
-  /**
-   * Apply the given context data for the duration of the given function.
-   * @param data
-   * @param fn
-   */
-  static apply<T>(data: ContextData, fn: () => Promise<T>): Promise<T>;
-  static apply<T>(data: ContextData, fn?: () => Promise<T>): Promise<T> | undefined {
-    if (fn) {
-      return new Promise<T>((resolve) => {
-        contextLocalStorage.run(new Context(data), () => resolve(fn()));
-      });
-    } else {
-      contextLocalStorage.enterWith(new Context(data));
-    }
+export interface RequestContext {
+  originDomain: string;
+}
+
+export interface SessionContext {
+  connectionId: string;
+  langs: string[];
+  identity: string;
+  num: number;
+}
+
+class Context<R extends RequestContext, S extends SessionContext> {
+  private _requestContext: Partial<R>;
+  private _sessionContext: Partial<S>;
+
+  public constructor(requestContext: Partial<R>, sessionContext: Partial<S>) {
+    this._requestContext = requestContext;
+    this._sessionContext = sessionContext;
   }
 
-  static get current(): Context {
-    const context = contextLocalStorage.getStore();
-    if (context) {
-      return context;
-    }
-    return new Context({});
+  public get requestContext() {
+    return this._requestContext;
   }
 
-  private contextData: ContextData;
-  private sharedContextData: ContextData;
-
-  private constructor(contextData: ContextData) {
-    this.contextData = contextData;
-    this.sharedContextData = { originDomain: contextData.originDomain };
+  public get sessionContext() {
+    return this._sessionContext;
   }
 
   public getClient<T extends ServiceApi<D>, D extends string = T["domain"]>(
@@ -90,49 +75,72 @@ class Context {
     });
   }
 
-  public set(key: string, val: Serializable, share = false): void {
-    this.contextData = { ...this.contextData, [key]: val };
-    if (share) {
-      this.sharedContextData = { ...this.sharedContextData, [key]: val };
+  public get<K extends keyof R>(key: K): Partial<R>[K];
+  public get<K extends keyof S>(key: K): Partial<S>[K];
+  public get<K extends keyof (R & S)>(key: K) {
+    if (key in this._requestContext) {
+      return this._requestContext[key as keyof R];
+    }
+    if (this._sessionContext && key in this._sessionContext) {
+      return this._sessionContext[key as keyof S];
     }
   }
 
-  public get<T extends Serializable>(key: string): T | undefined {
-    return this.contextData[key] as T;
+  public setRequest<K extends keyof R>(key: K, val: R[K] | undefined): void {
+    this._requestContext = { ...this._requestContext, [key]: val };
   }
 
-  public merge(data: ContextData): Context {
-    this.contextData = { ...this.contextData, ...data };
-    return this;
+  public setSession<K extends keyof S>(key: K, val: S[K] | undefined): void {
+    this._sessionContext = { ...(this._sessionContext ?? {}), [key]: val } as Partial<S>;
   }
 
-  public get data(): ContextData {
-    return this.contextData;
+  public merge(sessionContext: Partial<SessionContext>) {
+    this._sessionContext = { ...this._sessionContext, ...sessionContext };
   }
 
-  public get sharedData(): ContextData {
-    return this.sharedContextData;
+  public get identity() {
+    return this.get("identity");
   }
 
-  public get identity(): string | undefined {
-    return this.contextData.identity;
+  public get domain() {
+    return this.get("originDomain");
   }
 
-  public set identity(identity: string | undefined) {
-    this.set("identity", identity, true);
+  public get langs() {
+    return this.get("langs");
   }
 
-  public get domain(): string | undefined {
-    return this.contextData.originDomain;
-  }
-
-  public get langs(): string[] | undefined {
-    return this.contextData.langs;
-  }
-
-  public get connectionId(): string | undefined {
-    return this.contextData.connectionId;
+  public get connectionId() {
+    return this.get("connectionId");
   }
 }
 
-export default Context;
+export const createContextFactory = <
+  R extends RequestContext = RequestContext,
+  S extends SessionContext = SessionContext,
+>() => {
+  function apply(r: Partial<R>, s: Partial<S>): void;
+  function apply<T>(r: Partial<R>, s: Partial<S>, fn: () => Promise<T>): Promise<T>;
+  function apply<T>(r: Partial<R>, s: Partial<S>, fn?: () => Promise<T>): Promise<T> | undefined {
+    if (fn) {
+      return new Promise<T>((resolve) => {
+        contextLocalStorage.run(new Context(r, s), () => resolve(fn()));
+      });
+    } else {
+      contextLocalStorage.enterWith(new Context(r, s));
+    }
+  }
+
+  return {
+    apply,
+
+    get current() {
+      const context = contextLocalStorage.getStore() ?? new Context<R, S>({}, {});
+      return context as Context<R, S>;
+    },
+  };
+};
+
+const DefaultContext = createContextFactory();
+
+export default DefaultContext;

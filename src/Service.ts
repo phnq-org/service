@@ -14,7 +14,7 @@ import {
 } from "@phnq/message";
 import type { ConnectionOptions } from "nats";
 import { v4 as uuid } from "uuid";
-import Context from "./Context";
+import Context, { type SessionContext } from "./Context";
 import { NATS_MONITOR_URI, NATS_URI, SIGN_SALT } from "./config";
 import ServiceClient, { type DefaultClient } from "./ServiceClient";
 import ServiceError from "./ServiceError";
@@ -234,7 +234,9 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
     }
 
     connection.onReceive = (message) =>
-      Context.apply(message.contextData, () => this.handleRequest(message));
+      Context.apply(message.requestContext, message.sessionContext, () =>
+        this.handleRequest(message),
+      );
 
     return connection;
   }
@@ -321,7 +323,8 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                   origin: this.origin,
                   method,
                   payload,
-                  contextData: Context.current.data,
+                  requestContext: Context.current.requestContext,
+                  sessionContext: Context.current.sessionContext,
                 },
                 method !== "checkIn",
               );
@@ -333,11 +336,11 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                 const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
                 const context = Context.current;
                 return (async function* () {
-                  Context.apply(context.data);
+                  Context.apply(context.requestContext, context.sessionContext);
                   let numResponses = 0;
-                  for await (const { payload, sharedContextData } of responseIter) {
+                  for await (const { payload, sessionContext } of responseIter) {
                     numResponses += 1;
-                    Context.current.merge(sharedContextData);
+                    Context.current.merge(sessionContext);
                     yield payload;
                   }
                   clientStats.record(domain, method, {
@@ -346,8 +349,8 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                   });
                 })();
               } else if (response) {
-                const { payload, sharedContextData } = response as ServiceResponseMessage;
-                Context.current.merge(sharedContextData);
+                const { payload, sessionContext } = response as ServiceResponseMessage;
+                Context.current.merge(sessionContext);
                 clientStats.record(domain, method, { time: performance.now() - start });
                 return payload;
               }
@@ -387,7 +390,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
         ) {
           const context = Context.current;
           return (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
-            Context.apply(context.data);
+            Context.apply(context.requestContext, context.sessionContext);
             let numResponses = 0;
             for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
               numResponses += 1;
@@ -395,7 +398,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                 origin,
                 payload,
                 stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
-                sharedContextData: Context.current.sharedData,
+                sessionContext: Context.current.sessionContext as SessionContext,
               };
             }
             stats.record(domain, method, {
@@ -410,7 +413,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
             origin,
             payload: response,
             stats: { time },
-            sharedContextData: Context.current.sharedData,
+            sessionContext: Context.current.sessionContext as SessionContext,
           };
         }
       } catch (err) {

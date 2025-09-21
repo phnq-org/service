@@ -3,11 +3,23 @@ import { get } from "node:http";
 import { Anomaly } from "@phnq/message";
 import ApiService from "../api/ApiService";
 import { ApiClient } from "../browser";
-import Context, { type Serializable } from "../Context";
+import Context, {
+  createContextFactory,
+  type RequestContext,
+  type SessionContext,
+} from "../Context";
 import Service, { type Handler } from "../Service";
 import ServiceClient from "../ServiceClient";
 
 // ========================== TEST INFRASTRUCTURE ==========================
+
+interface TestRequestContext extends RequestContext {
+  bubba: string;
+  private: string;
+}
+interface TestSessionContext extends SessionContext {}
+
+const TestContext = createContextFactory<TestRequestContext, TestSessionContext>();
 
 const apiService = new ApiService({ port: 55777 });
 
@@ -48,7 +60,7 @@ interface VegApi {
 }
 
 const getVegKinds: Handler<VegApi, "getKinds"> = async () => {
-  if (Context.current.get("bubba") !== "gump") {
+  if (TestContext.current.get("bubba") !== "gump") {
     throw new Error("Nope");
   }
 
@@ -67,7 +79,7 @@ interface FruitApi {
     getKinds(): Promise<string[]>;
     getKindsIterator(): Promise<AsyncIterableIterator<string>>;
     doErrors(type: "error" | "anomaly" | "none"): Promise<void>;
-    getFromContext(key: string): Promise<Serializable | undefined>;
+    // getFromContext(key: string): Promise<Serializable | undefined>;
     getVeggies(): Promise<string[]>;
     _noAccess(): Promise<string>;
   };
@@ -92,22 +104,22 @@ const doErrors: Handler<FruitApi, "doErrors"> = async (type) => {
   }
 };
 
-const getFromContext: Handler<FruitApi, "getFromContext"> = async (key) => {
-  Context.current.set("private", "only4me");
+// const getFromContext: Handler<FruitApi, "getFromContext"> = async (key) => {
+//   TestContext.current.setRequest("private", "only4me");
 
-  if (getMyData() !== "only4me") {
-    throw new Error("Did not get private data");
-  }
+//   if (getMyData() !== "only4me") {
+//     throw new Error("Did not get private data");
+//   }
 
-  return Context.current.get(key);
-};
+//   return TestContext.current.get(key);
+// };
 
-const getMyData = (): string | undefined => {
-  return Context.current.get<string>("private");
-};
+// const getMyData = (): string | undefined => {
+//   return TestContext.current.get("private");
+// };
 
 const getVeggies: Handler<FruitApi, "getVeggies"> = async () => {
-  Context.current.set("bubba", "gump");
+  TestContext.current.setRequest("bubba", "gump");
   const vegClient = Context.current.getClient<VegApi>("vegWs");
   return await vegClient.getKinds();
 };
@@ -117,7 +129,7 @@ const _noAccess: Handler<FruitApi, "_noAccess"> = async () => {
 };
 
 const fruitService = new Service<FruitApi>("fruitWs", {
-  handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies, _noAccess },
+  handlers: { getKinds, getKindsIterator, doErrors, getVeggies, _noAccess },
 });
 
 const notificationsFruit: FruitNotification[] = [];

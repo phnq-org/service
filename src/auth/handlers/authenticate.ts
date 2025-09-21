@@ -9,10 +9,10 @@ const authenticate: Handler<AuthApi, "authenticate"> = async (authReq, service) 
   if (authService.onAuthenticate) {
     try {
       const { identity, authResponse } = await authService.onAuthenticate(authReq);
-      Context.current.identity = identity;
+      Context.current.setSession("identity", identity);
       return { authenticated: true, identity, authResponse };
     } catch (err) {
-      Context.current.identity = undefined;
+      Context.current.setSession("identity", undefined);
       throw new ServiceError({
         type: "unauthorized",
         message: (err as Error).message || String(err),

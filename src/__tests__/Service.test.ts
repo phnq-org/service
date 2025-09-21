@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { matchCategory } from "@phnq/log";
 import { Anomaly } from "@phnq/message";
-
-import { Context, type Serializable, Service, ServiceClient } from "..";
+import { createContextFactory, type RequestContext, type SessionContext } from "@/Context";
+import { type Serializable, Service, ServiceClient } from "..";
 import { NATS_MONITOR_URI } from "../config";
 import type { Handler } from "../Service";
 
@@ -12,6 +12,19 @@ if (process.env.PHNQ_MESSAGE_LOG_NATS === "1") {
 
 // ========================== TEST INFRASTRUCTURE ==========================
 
+interface TestRequestContext extends RequestContext {
+  bubba: string;
+  private: string;
+  foo: string;
+  language: string;
+}
+interface TestSessionContext extends SessionContext {
+  currentFruit: "apple" | "orange" | "pear";
+  shared: string;
+}
+
+const TestContext = createContextFactory<TestRequestContext, TestSessionContext>();
+
 interface VegApi {
   domain: "veg";
   handlers: {
@@ -20,7 +33,7 @@ interface VegApi {
 }
 
 const getVegKinds: Handler<VegApi, "getKinds"> = async () => {
-  if (Context.current.get("bubba") !== "gump") {
+  if (TestContext.current.get("bubba") !== "gump") {
     throw new Error("Nope");
   }
 
@@ -33,7 +46,7 @@ interface FruitApi {
   domain: "fruit";
   handlers: {
     getKinds(): Promise<string[]>;
-    getKindsIterator(): Promise<AsyncIterableIterator<string>>;
+    getKindsIterator(): Promise<AsyncIterableIterator<"apple" | "orange" | "pear">>;
     doErrors(type: "error" | "anomaly" | "none"): Promise<void>;
     getFromContext(key: string): Promise<Serializable | undefined>;
     getVeggies(): Promise<string[]>;
@@ -44,11 +57,11 @@ const getKinds: Handler<FruitApi, "getKinds"> = async () => ["apple", "orange", 
 
 const getKindsIterator: Handler<FruitApi, "getKindsIterator"> = async () =>
   (async function* () {
-    Context.current.set("currentFruit", "apple", true);
+    TestContext.current.setSession("currentFruit", "apple");
     yield "apple";
-    Context.current.set("currentFruit", "orange", true);
+    TestContext.current.setSession("currentFruit", "orange");
     yield "orange";
-    Context.current.set("currentFruit", "pear", true);
+    TestContext.current.setSession("currentFruit", "pear");
     yield "pear";
   })();
 
@@ -63,23 +76,23 @@ const doErrors: Handler<FruitApi, "doErrors"> = async (type) => {
 };
 
 const getFromContext: Handler<FruitApi, "getFromContext"> = async (key) => {
-  Context.current.set("private", "only4me");
-  Context.current.set("shared", "4anyone", true);
+  TestContext.current.setRequest("private", "only4me");
+  TestContext.current.setSession("shared", "4anyone");
 
   if (getMyData() !== "only4me") {
     throw new Error("Did not get private data");
   }
 
-  return Context.current.get(key);
+  return TestContext.current.get(key as keyof TestRequestContext);
 };
 
 const getMyData = (): string | undefined => {
-  return Context.current.get<string>("private");
+  return TestContext.current.get("private");
 };
 
 const getVeggies: Handler<FruitApi, "getVeggies"> = async () => {
-  Context.current.set("bubba", "gump");
-  const vegClient = Context.current.getClient<VegApi>("veg");
+  TestContext.current.setRequest("bubba", "gump");
+  const vegClient = TestContext.current.getClient<VegApi>("veg");
   return await vegClient.getKinds();
 };
 
@@ -198,25 +211,25 @@ describe("Service", () => {
   });
 
   it("should retrieve current context", () => {
-    Context.apply({ originDomain: "some-domain", foo: "bar" }, async () => {
-      expect(Context.current.get<string>("foo")).toBe("bar");
+    TestContext.apply({ originDomain: "some-domain", foo: "bar" }, {}, async () => {
+      expect(TestContext.current.get("foo")).toBe("bar");
     });
   });
 
   it("applies context", async () => {
-    await Context.apply({ language: "icelandic" }, async () => {
+    await TestContext.apply({ language: "icelandic" }, {}, async () => {
       expect(await fruitClient.getFromContext("language")).toBe("icelandic");
-      expect(Context.current.get("private")).toBeUndefined();
-      expect(Context.current.get<string>("shared")).toBe("4anyone");
+      expect(TestContext.current.get("private")).toBeUndefined();
+      expect(TestContext.current.get("shared")).toBe("4anyone");
     });
   });
 
   it("applies context iter", async () => {
-    await Context.apply({ language: "icelandic" }, async () => {
+    await TestContext.apply({ language: "icelandic" }, {}, async () => {
       const responses: string[] = [];
 
       for await (const response of await fruitClient.getKindsIterator()) {
-        expect(Context.current.get<string>("currentFruit")).toBe(response);
+        expect(TestContext.current.get("currentFruit")).toBe(response);
         responses.push(response);
       }
       expect(responses).toStrictEqual(["apple", "orange", "pear"]);

@@ -60,7 +60,7 @@ describe("AuthService", () => {
       expect(error).toBeUndefined();
     });
 
-    test.only("Auth fail", async () => {
+    test("Auth fail", async () => {
       try {
         await authWsClient.authenticate("bad-token");
         expect(false).toBe(true);

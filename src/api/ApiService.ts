@@ -4,7 +4,7 @@ import https from "node:https";
 import { createLogger } from "@phnq/log";
 import { Anomaly, type MessageConnection, WebSocketMessageServer } from "@phnq/message";
 
-import Context, { type ContextData } from "../Context";
+import Context, { type RequestContext, type SessionContext } from "../Context";
 import { API_SERVICE_DOMAIN } from "../domains";
 import Service from "../Service";
 import ServiceClient from "../ServiceClient";
@@ -28,17 +28,12 @@ interface SecureConfig extends Omit<Config, "secure"> {
   certPath: string;
 }
 
-interface ConnectionAttributes {
-  langs: string[];
-  identity?: string;
-}
-
 class ApiService<A = never> extends Service<NotifyApi> {
   private apiServiceConfig: Config | SecureConfig;
   private wsServer: WebSocketMessageServer<
     ApiRequestMessage,
     ApiResponseMessage,
-    ConnectionAttributes & A
+    SessionContext & A
   >;
   private readonly _httpServer: http.Server;
   public onHttpRequest: (
@@ -85,7 +80,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
     this.wsServer = new WebSocketMessageServer<
       ApiRequestMessage,
       ApiResponseMessage,
-      ConnectionAttributes & A
+      SessionContext & A
     >({
       path,
       httpServer: this.httpServer,
@@ -156,7 +151,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
    * HTTP request for the purpose of storing connection-persisnet data.
    */
   private async onConnect(
-    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes>,
+    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, SessionContext>,
     req: http.IncomingMessage,
   ): Promise<void> {
     if (this.apiServiceConfig.logConnections) {
@@ -166,7 +161,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
   }
 
   private async onDisconnect(
-    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes>,
+    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, SessionContext>,
   ): Promise<void> {
     if (this.apiServiceConfig.logConnections) {
       log("Disconnected:", conn.id);
@@ -180,7 +175,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
   }
 
   private async onReceiveClientMessage(
-    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, ConnectionAttributes>,
+    conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, SessionContext>,
     requestMessage: ApiRequestMessage,
   ): Promise<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>> {
     const { domain, method, payload: payloadRaw } = requestMessage;
@@ -192,10 +187,13 @@ class ApiService<A = never> extends Service<NotifyApi> {
 
     const payload = transformRequestPayload(payloadRaw, requestMessage);
 
-    const contextData: ContextData = {
+    const requestContext: Partial<RequestContext> = {
       originDomain: domain,
-      identity: conn.getAttribute("identity"),
+    };
+
+    const sessionContext: Partial<SessionContext> = {
       langs: conn.getAttribute("langs"),
+      identity: conn.getAttribute("identity"),
       connectionId: conn.id,
     };
 
@@ -207,21 +205,26 @@ class ApiService<A = never> extends Service<NotifyApi> {
       >;
     }>(domain);
 
-    return Context.apply(contextData, async () => {
+    return Context.apply(requestContext, sessionContext, async () => {
       const response = await serviceClient[method]?.(payload);
       if (
         typeof response === "object" &&
         (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]
       ) {
         return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
-          Context.apply(contextData);
+          Context.apply(requestContext, sessionContext);
           for await (const payload of response as AsyncIterableIterator<unknown>) {
-            conn.setAttribute("identity", Context.current.identity);
             yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
+          }
+          for (const [k, v] of Object.entries(Context.current.sessionContext)) {
+            conn.setAttribute(k as keyof SessionContext, v);
           }
         })();
       } else {
-        conn.setAttribute("identity", Context.current.identity);
+        for (const [k, v] of Object.entries(Context.current.sessionContext)) {
+          conn.setAttribute(k as keyof SessionContext, v);
+        }
+
         return { payload: transformResponsePayload(response, requestMessage), stats: 0 };
       }
     });
