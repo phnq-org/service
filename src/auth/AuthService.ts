@@ -1,6 +1,7 @@
 import Service, { type ServiceConfig } from "../Service";
 import type AuthApi from "./AuthApi";
 import authenticate from "./handlers/authenticate";
+import clearIdentity from "./handlers/clearIdentity";
 
 interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, "handlers"> {
   /**
@@ -28,7 +29,7 @@ class AuthService extends Service<AuthApi> {
   public readonly onAuthenticate: AuthServiceConfig["onAuthenticate"];
 
   public constructor(config: AuthServiceConfig) {
-    super("phnq-auth", { ...config, handlers: { authenticate } });
+    super("phnq-auth", { ...config, handlers: { authenticate, clearIdentity } });
     this.onAuthenticate = config.onAuthenticate;
   }
 }

@@ -12,7 +12,7 @@ const authenticate: Handler<AuthApi, "authenticate"> = async (authReq, service) 
       Context.current.setSession("identity", identity);
       return { authenticated: true, identity, authResponse };
     } catch (err) {
-      Context.current.setSession("identity", undefined);
+      Context.current.setSession("identity", null);
       throw new ServiceError({
         type: "unauthorized",
         message: (err as Error).message || String(err),

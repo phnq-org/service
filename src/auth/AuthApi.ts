@@ -2,6 +2,7 @@ export default interface AuthApi {
   domain: "phnq-auth";
   handlers: {
     authenticate(authReq: unknown): Promise<AuthResult>;
+    clearIdentity(): Promise<void>;
   };
 }
 
