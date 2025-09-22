@@ -336,7 +336,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                 const responseIter = response as AsyncIterableIterator<ServiceResponseMessage>;
                 const context = Context.current;
                 return (async function* () {
-                  Context.apply(context.requestContext, context.sessionContext);
+                  await Context.enter(context.requestContext, context.sessionContext);
                   let numResponses = 0;
                   for await (const { payload, sessionContext } of responseIter) {
                     numResponses += 1;
@@ -347,6 +347,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                     time: performance.now() - start,
                     numResponses,
                   });
+                  Context.exit();
                 })();
               } else if (response) {
                 const { payload, sessionContext } = response as ServiceResponseMessage;
@@ -390,7 +391,12 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
         ) {
           const context = Context.current;
           return (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
-            Context.apply(context.requestContext, context.sessionContext);
+            await Context.enter(context.requestContext, context.sessionContext);
+
+            stats.record(domain, method, {
+              time: Number(process.hrtime.bigint() - start) / 1_000_000,
+            });
+
             let numResponses = 0;
             for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
               numResponses += 1;
@@ -405,6 +411,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
               time: Number(process.hrtime.bigint() - start) / 1_000_000,
               numResponses,
             });
+            Context.exit();
           })();
         } else {
           const time = Number(process.hrtime.bigint() - start) / 1_000_000;

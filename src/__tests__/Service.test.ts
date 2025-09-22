@@ -210,8 +210,8 @@ describe("Service", () => {
     fruitClientBadApi.disconnect();
   });
 
-  it("should retrieve current context", () => {
-    TestContext.apply({ originDomain: "some-domain", foo: "bar" }, {}, async () => {
+  it("should retrieve current context", async () => {
+    await TestContext.apply({ originDomain: "some-domain", foo: "bar" }, {}, async () => {
       expect(TestContext.current.get("foo")).toBe("bar");
     });
   });
