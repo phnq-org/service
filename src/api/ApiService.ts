@@ -212,13 +212,14 @@ class ApiService<A = never> extends Service<NotifyApi> {
         (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]
       ) {
         return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
-          Context.apply(requestContext, sessionContext);
+          await Context.enter(requestContext, sessionContext);
           for await (const payload of response as AsyncIterableIterator<unknown>) {
             yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
           }
           for (const [k, v] of Object.entries(Context.current.sessionContext)) {
             conn.setAttribute(k as keyof SessionContext, v);
           }
+          Context.exit();
         })();
       } else {
         for (const [k, v] of Object.entries(Context.current.sessionContext)) {

@@ -39,7 +39,18 @@ class Context<R extends RequestContext, S extends SessionContext> {
   ) {
     this._requestContext = requestContext;
     this._sessionContext = sessionContext;
-    Object.assign(this, extFn(this));
+
+    const descriptors = Object.getOwnPropertyDescriptors(extFn(this));
+    for (const key in descriptors) {
+      if (descriptors[key]) {
+        Object.defineProperty(this, key, descriptors[key]);
+      }
+    }
+  }
+
+  public async init() {
+    // This is just here to satisfy the type. It will be overrittenen by the
+    // result of the `extFn` passed to the constructor.
   }
 
   public get requestContext() {
@@ -120,10 +131,13 @@ class Context<R extends RequestContext, S extends SessionContext> {
 }
 
 export interface ContextFactory<X1, R extends RequestContext, S extends SessionContext> {
-  apply(r: Partial<R>, s: Partial<S>): void;
+  enter(r: Partial<R>, s: Partial<S>): Promise<void>;
+  exit(): void;
   apply<T>(r: Partial<R>, s: Partial<S>, fn: () => Promise<T>): Promise<T>;
   current: Context<R, S> & X1;
-  extend<X2>(xFn: (context: Context<R, S>) => X2): ContextFactory<X1 & X2, R, S>;
+  extend<X2 extends { init?: () => Promise<void> } | object>(
+    xFn: (context: Context<R, S>) => X2,
+  ): ContextFactory<X1 & X2, R, S>;
 }
 
 export const createContextFactory = <
@@ -131,25 +145,37 @@ export const createContextFactory = <
   SX = object,
   R extends RequestContext & RX = RequestContext & RX,
   S extends SessionContext & SX = SessionContext & SX,
-  // R extends RequestContext = RequestContext,
-  // S extends SessionContext = SessionContext,
 >(
-  extFn: (context: Context<R, S>) => unknown = () => ({}),
+  extFn: (context: Context<R, S>) => { init?: () => Promise<void> } = () => ({}),
 ) => {
-  function apply(r: Partial<R>, s: Partial<S>): void;
-  function apply<T>(r: Partial<R>, s: Partial<S>, fn: () => Promise<T>): Promise<T>;
-  function apply<T>(r: Partial<R>, s: Partial<S>, fn?: () => Promise<T>): Promise<T> | undefined {
-    if (fn) {
-      return new Promise<T>((resolve) => {
-        contextLocalStorage.run(new Context(r, s, extFn), () => resolve(fn()));
-      });
-    } else {
-      contextLocalStorage.enterWith(new Context(r, s, extFn));
-    }
-  }
-
   return {
-    apply,
+    enter(r, s) {
+      const context = new Context(r, s, extFn);
+      contextLocalStorage.enterWith(context);
+      return new Promise<void>((resolve, reject) => {
+        context
+          .init()
+          .then(() => resolve())
+          .catch((err) => reject(err));
+      });
+    },
+    exit() {
+      contextLocalStorage.exit(() => {});
+    },
+    async apply(r, s, fn) {
+      const context = new Context(r, s, extFn);
+      return new Promise((resolve, reject) => {
+        contextLocalStorage.run(context, async () => {
+          await context.init();
+          try {
+            const result = await fn();
+            resolve(result);
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+    },
 
     get current() {
       const context = contextLocalStorage.getStore() ?? new Context<R, S>({}, {}, extFn);
