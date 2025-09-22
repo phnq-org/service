@@ -32,9 +32,14 @@ class Context<R extends RequestContext, S extends SessionContext> {
   private _requestContext: Partial<R>;
   private _sessionContext: Partial<S>;
 
-  public constructor(requestContext: Partial<R>, sessionContext: Partial<S>) {
+  public constructor(
+    requestContext: Partial<R>,
+    sessionContext: Partial<S>,
+    extFn: (context: Context<R, S>) => unknown,
+  ) {
     this._requestContext = requestContext;
     this._sessionContext = sessionContext;
+    Object.assign(this, extFn(this));
   }
 
   public get requestContext() {
@@ -114,25 +119,32 @@ class Context<R extends RequestContext, S extends SessionContext> {
   }
 }
 
-export interface ContextFactory<R extends RequestContext, S extends SessionContext> {
+export interface ContextFactory<X1, R extends RequestContext, S extends SessionContext> {
   apply(r: Partial<R>, s: Partial<S>): void;
   apply<T>(r: Partial<R>, s: Partial<S>, fn: () => Promise<T>): Promise<T>;
-  current: Context<R, S>;
+  current: Context<R, S> & X1;
+  extend<X2>(xFn: (context: Context<R, S>) => X2): ContextFactory<X1 & X2, R, S>;
 }
 
 export const createContextFactory = <
-  R extends RequestContext = RequestContext,
-  S extends SessionContext = SessionContext,
->(): ContextFactory<R, S> => {
+  RX = object,
+  SX = object,
+  R extends RequestContext & RX = RequestContext & RX,
+  S extends SessionContext & SX = SessionContext & SX,
+  // R extends RequestContext = RequestContext,
+  // S extends SessionContext = SessionContext,
+>(
+  extFn: (context: Context<R, S>) => unknown = () => ({}),
+) => {
   function apply(r: Partial<R>, s: Partial<S>): void;
   function apply<T>(r: Partial<R>, s: Partial<S>, fn: () => Promise<T>): Promise<T>;
   function apply<T>(r: Partial<R>, s: Partial<S>, fn?: () => Promise<T>): Promise<T> | undefined {
     if (fn) {
       return new Promise<T>((resolve) => {
-        contextLocalStorage.run(new Context(r, s), () => resolve(fn()));
+        contextLocalStorage.run(new Context(r, s, extFn), () => resolve(fn()));
       });
     } else {
-      contextLocalStorage.enterWith(new Context(r, s));
+      contextLocalStorage.enterWith(new Context(r, s, extFn));
     }
   }
 
@@ -140,10 +152,14 @@ export const createContextFactory = <
     apply,
 
     get current() {
-      const context = contextLocalStorage.getStore() ?? new Context<R, S>({}, {});
+      const context = contextLocalStorage.getStore() ?? new Context<R, S>({}, {}, extFn);
       return context as Context<R, S>;
     },
-  };
+
+    extend(xFn) {
+      return createContextFactory(xFn);
+    },
+  } as ContextFactory<object, R, S>;
 };
 
 const DefaultContext = createContextFactory();

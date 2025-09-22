@@ -3,23 +3,16 @@ import { get } from "node:http";
 import { Anomaly } from "@phnq/message";
 import ApiService from "../api/ApiService";
 import { ApiClient } from "../browser";
-import Context, {
-  createContextFactory,
-  type RequestContext,
-  type SessionContext,
-} from "../Context";
+import Context, { createContextFactory } from "../Context";
 import Service, { type Handler } from "../Service";
 import ServiceClient from "../ServiceClient";
 
 // ========================== TEST INFRASTRUCTURE ==========================
 
-interface TestRequestContext extends RequestContext {
+const TestContext = createContextFactory<{
   bubba: string;
   private: string;
-}
-interface TestSessionContext extends SessionContext {}
-
-const TestContext = createContextFactory<TestRequestContext, TestSessionContext>();
+}>();
 
 const apiService = new ApiService({ port: 55777 });
 
