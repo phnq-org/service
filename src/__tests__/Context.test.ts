@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { sleep } from "bun";
-import { createContextFactory } from "..";
+import { Context, createContextFactory } from "..";
+
+/**
+ * Using the `default` contect factory for Context.apply() because that's
+ * how the thread's contect will gnerally be set up.
+ */
 
 describe("Context", () => {
   test("Extend context with function that returns a value", async () => {
@@ -8,7 +13,7 @@ describe("Context", () => {
       getIdentity: () => ctx.identity,
     }));
 
-    await TestContext.apply({}, { identity: "bubba" }, async () => {
+    await Context.apply({}, { identity: "bubba" }, async () => {
       expect(TestContext.current.identity).toBe("bubba");
       expect(TestContext.current.getIdentity()).toBe("bubba");
     });
@@ -19,7 +24,7 @@ describe("Context", () => {
       setIdentity: (newId: string) => ctx.setSession("identity", newId),
     }));
 
-    await TestContext.apply({}, { identity: "bubba" }, async () => {
+    await Context.apply({}, { identity: "bubba" }, async () => {
       expect(TestContext.current.identity).toBe("bubba");
       TestContext.current.setIdentity("newBubba");
       expect(TestContext.current.identity).toBe("newBubba");
@@ -34,7 +39,7 @@ describe("Context", () => {
       },
     }));
 
-    await TestContext.apply({}, { identity: "bubba" }, async () => {
+    await Context.apply({}, { identity: "bubba" }, async () => {
       expect(TestContext.current.identity).toBe("bubba");
       await TestContext.current.setIdentity("newBubba");
       expect(TestContext.current.identity).toBe("newBubba");
@@ -48,7 +53,7 @@ describe("Context", () => {
       },
     }));
 
-    await TestContext.apply({}, { identity: "bubba" }, async () => {
+    await Context.apply({}, { identity: "bubba" }, async () => {
       expect(TestContext.current.identity).toBe("bubba");
       expect(TestContext.current.altIdentity).toBe("alt:bubba");
     });
@@ -56,17 +61,17 @@ describe("Context", () => {
 
   test("Context extension initializer", async () => {
     const TestContext = createContextFactory<{ user: string }>().extend((ctx) => ({
-      init: async () => {
-        await sleep(100);
-        ctx.setRequest("user", `user:${ctx.identity}`);
-      },
-
       get user() {
-        return ctx.get("user") ?? "cunt";
+        return ctx.get("user");
       },
     }));
 
-    const result = await TestContext.apply({}, { identity: "123" }, async () => {
+    TestContext.init(async (ctx) => {
+      await sleep(100);
+      ctx.setRequest("user", `user:${ctx.identity}`);
+    });
+
+    const result = await Context.apply({}, { identity: "123" }, async () => {
       expect(TestContext.current.user).toBe("user:123");
       return true;
     });
