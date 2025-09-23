@@ -3,7 +3,8 @@ import type { ApiNotificationMessage, NotifyApi } from "./api/ApiMessage";
 import type { ServiceApi } from "./Service";
 import type { DefaultClient } from "./ServiceClient";
 
-const contextLocalStorage = new AsyncLocalStorage<Context<RequestContext, SessionContext>>();
+// This is typed as `unknown`. Casting is done as needed.
+const contextLocalStorage = new AsyncLocalStorage();
 
 export type Serializable =
   | string
@@ -28,29 +29,45 @@ export interface SessionContext {
   identity: string;
 }
 
+const initializers = new Set<(context: unknown) => Promise<void>>();
+
 class Context<R extends RequestContext, S extends SessionContext> {
   private _requestContext: Partial<R>;
   private _sessionContext: Partial<S>;
+  private extensions = new Set<(context: Context<R, S>) => unknown>();
 
-  public constructor(
-    requestContext: Partial<R>,
-    sessionContext: Partial<S>,
-    extFn: (context: Context<R, S>) => unknown,
-  ) {
+  public constructor(requestContext: Partial<R>, sessionContext: Partial<S>) {
     this._requestContext = requestContext;
     this._sessionContext = sessionContext;
+  }
 
-    const descriptors = Object.getOwnPropertyDescriptors(extFn(this));
-    for (const key in descriptors) {
-      if (descriptors[key]) {
-        Object.defineProperty(this, key, descriptors[key]);
+  public async init() {
+    for (const init of initializers) {
+      try {
+        await init(this);
+      } catch (err) {
+        console.error("Error during context initialization:", err);
       }
     }
   }
 
-  public async init() {
-    // This is just here to satisfy the type. It will be overrittenen by the
-    // result of the `extFn` passed to the constructor.
+  /**
+   * Extend the context. This will be run every time the context is referenced.
+   * However, each extension will only be applied once.
+   */
+  public extend(extFn: (context: Context<R, S>) => unknown) {
+    if (this.extensions.has(extFn)) {
+      return;
+    }
+
+    this.extensions.add(extFn);
+
+    const descriptors = Object.getOwnPropertyDescriptors(extFn(this));
+    for (const key in descriptors) {
+      if (key !== "init" && descriptors[key]) {
+        Object.defineProperty(this, key, descriptors[key]);
+      }
+    }
   }
 
   public get requestContext() {
@@ -138,6 +155,7 @@ export interface ContextFactory<X1, R extends RequestContext, S extends SessionC
   extend<X2 extends { init?: () => Promise<void> } | object>(
     xFn: (context: Context<R, S>) => X2,
   ): ContextFactory<X1 & X2, R, S>;
+  init: (initFn: (context: Context<R, S>) => Promise<void>) => void;
 }
 
 export const createContextFactory = <
@@ -148,9 +166,15 @@ export const createContextFactory = <
 >(
   extFn: (context: Context<R, S>) => { init?: () => Promise<void> } = () => ({}),
 ) => {
+  const init = extFn(new Context({}, {})).init;
+  if (init) {
+    initializers.add(init);
+  }
+
   return {
     enter(r, s) {
-      const context = new Context(r, s, extFn);
+      const context = new Context(r, s);
+      context.extend(extFn);
       contextLocalStorage.enterWith(context);
       return new Promise<void>((resolve, reject) => {
         context
@@ -163,7 +187,8 @@ export const createContextFactory = <
       contextLocalStorage.exit(() => {});
     },
     async apply(r, s, fn) {
-      const context = new Context(r, s, extFn);
+      const context = new Context(r, s);
+      context.extend(extFn);
       return new Promise((resolve, reject) => {
         contextLocalStorage.run(context, async () => {
           await context.init();
@@ -178,12 +203,17 @@ export const createContextFactory = <
     },
 
     get current() {
-      const context = contextLocalStorage.getStore() ?? new Context<R, S>({}, {}, extFn);
-      return context as Context<R, S>;
+      const context = (contextLocalStorage.getStore() ?? new Context({}, {})) as Context<R, S>;
+      context.extend(extFn);
+      return context;
     },
 
     extend(xFn) {
       return createContextFactory(xFn);
+    },
+
+    init(initFn) {
+      initializers.add(initFn as (context: unknown) => Promise<void>);
     },
   } as ContextFactory<object, R, S>;
 };
