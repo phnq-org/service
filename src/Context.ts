@@ -123,7 +123,7 @@ class Context<R extends RequestContext, S extends SessionContext> {
   }
 
   public setSession<K extends keyof S>(key: K, val: S[K] | null): void {
-    this._sessionContext = { ...(this._sessionContext ?? {}), [key]: val } as Partial<S>;
+    this._sessionContext = { ...(this._sessionContext ?? {}), [key]: val };
   }
 
   public merge(sessionContext: Partial<SessionContext>) {

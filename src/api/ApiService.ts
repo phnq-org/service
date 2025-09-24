@@ -28,13 +28,9 @@ interface SecureConfig extends Omit<Config, "secure"> {
   certPath: string;
 }
 
-class ApiService<A = never> extends Service<NotifyApi> {
+class ApiService extends Service<NotifyApi> {
   private apiServiceConfig: Config | SecureConfig;
-  private wsServer: WebSocketMessageServer<
-    ApiRequestMessage,
-    ApiResponseMessage,
-    SessionContext & A
-  >;
+  private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, SessionContext>;
   private readonly _httpServer: http.Server;
   public onHttpRequest: (
     req: http.IncomingMessage,
@@ -80,7 +76,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
     this.wsServer = new WebSocketMessageServer<
       ApiRequestMessage,
       ApiResponseMessage,
-      SessionContext & A
+      SessionContext
     >({
       path,
       httpServer: this.httpServer,
@@ -192,8 +188,7 @@ class ApiService<A = never> extends Service<NotifyApi> {
     };
 
     const sessionContext: Partial<SessionContext> = {
-      langs: conn.getAttribute("langs"),
-      identity: conn.getAttribute("identity"),
+      ...conn.attributes,
       connectionId: conn.id,
     };
 
