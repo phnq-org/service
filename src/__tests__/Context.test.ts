@@ -59,19 +59,29 @@ describe("Context", () => {
     });
   });
 
-  test("Context extension initializer", async () => {
+  test.only("Context extension initializer", async () => {
     const TestContext = createContextFactory<{ user: string }>().extend((ctx) => ({
       get user() {
         return ctx.get("user");
       },
     }));
 
-    TestContext.init(async (ctx) => {
+    TestContext.on("enter", async ({ context }) => {
       await sleep(100);
-      ctx.setRequest("user", `user:${ctx.identity}`);
+      context.setRequest("user", `user:${context.identity}`);
+    });
+
+    TestContext.on("exit", async ({ context, exitedContext }) => {
+      expect(context).toBe(exitedContext);
+      expect(context.id).toBe(exitedContext.id);
+      expect(context.state).toBe("exited");
+      expect(context.identity).toBe("123");
+      expect(Context.current.id).not.toBe(exitedContext.id);
+      expect(Context.current.state).toBe("detached");
     });
 
     const result = await Context.apply({}, { identity: "123" }, async () => {
+      expect(TestContext.current.state).toBe("current");
       expect(TestContext.current.user).toBe("user:123");
       return true;
     });

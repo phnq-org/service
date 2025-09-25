@@ -14,7 +14,7 @@ import {
 } from "@phnq/message";
 import type { ConnectionOptions } from "nats";
 import { v4 as uuid } from "uuid";
-import Context, { type SessionContext } from "./Context";
+import Context, { dispatchContextEvent, type SessionContext } from "./Context";
 import { NATS_MONITOR_URI, NATS_URI, SIGN_SALT } from "./config";
 import ServiceClient, { type DefaultClient } from "./ServiceClient";
 import ServiceError from "./ServiceError";
@@ -337,17 +337,20 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                 const context = Context.current;
                 return (async function* () {
                   await Context.enter(context.requestContext, context.sessionContext);
-                  let numResponses = 0;
-                  for await (const { payload, sessionContext } of responseIter) {
-                    numResponses += 1;
-                    Context.current.merge(sessionContext);
-                    yield payload;
+                  try {
+                    let numResponses = 0;
+                    for await (const { payload, sessionContext } of responseIter) {
+                      numResponses += 1;
+                      Context.current.merge(sessionContext);
+                      yield payload;
+                    }
+                    clientStats.record(domain, method, {
+                      time: performance.now() - start,
+                      numResponses,
+                    });
+                  } finally {
+                    Context.exit();
                   }
-                  clientStats.record(domain, method, {
-                    time: performance.now() - start,
-                    numResponses,
-                  });
-                  Context.exit();
                 })();
               } else if (response) {
                 const { payload, sessionContext } = response as ServiceResponseMessage;
@@ -380,10 +383,9 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
 
     const handler = this.handlers[method];
     if (handler) {
+      await dispatchContextEvent("service:request", { domain, method, payload });
+
       try {
-        Context.current.getClient = <T extends ServiceApi<D>, D extends string = T["domain"]>(
-          domain: D,
-        ) => ServiceClient.create<T>(domain);
         const response = await handler(payload, this);
         if (
           typeof response === "object" &&
@@ -392,26 +394,28 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
           const context = Context.current;
           return (async function* (): AsyncIterableIterator<ServiceResponseMessage> {
             await Context.enter(context.requestContext, context.sessionContext);
+            try {
+              stats.record(domain, method, {
+                time: Number(process.hrtime.bigint() - start) / 1_000_000,
+              });
 
-            stats.record(domain, method, {
-              time: Number(process.hrtime.bigint() - start) / 1_000_000,
-            });
-
-            let numResponses = 0;
-            for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
-              numResponses += 1;
-              yield {
-                origin,
-                payload,
-                stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
-                sessionContext: Context.current.sessionContext as SessionContext,
-              };
+              let numResponses = 0;
+              for await (const payload of response as AsyncIterableIterator<ServiceResponseMessage>) {
+                numResponses += 1;
+                yield {
+                  origin,
+                  payload,
+                  stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
+                  sessionContext: Context.current.sessionContext as SessionContext,
+                };
+              }
+              stats.record(domain, method, {
+                time: Number(process.hrtime.bigint() - start) / 1_000_000,
+                numResponses,
+              });
+            } finally {
+              Context.exit();
             }
-            stats.record(domain, method, {
-              time: Number(process.hrtime.bigint() - start) / 1_000_000,
-              numResponses,
-            });
-            Context.exit();
           })();
         } else {
           const time = Number(process.hrtime.bigint() - start) / 1_000_000;

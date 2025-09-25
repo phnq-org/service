@@ -13,14 +13,14 @@ if (process.env.PHNQ_MESSAGE_LOG_NATS === "1") {
 // ========================== TEST INFRASTRUCTURE ==========================
 
 interface TestRequestContext extends RequestContext {
-  bubba: string;
-  private: string;
-  foo: string;
-  language: string;
+  bubba?: string;
+  private?: string;
+  foo?: string;
+  language?: string;
 }
 interface TestSessionContext extends SessionContext {
-  currentFruit: "apple" | "orange" | "pear";
-  shared: string;
+  currentFruit?: "apple" | "orange" | "pear";
+  shared?: string;
 }
 
 const TestContext = createContextFactory<TestRequestContext, TestSessionContext>();
@@ -92,7 +92,7 @@ const getMyData = (): string | undefined => {
 
 const getVeggies: Handler<FruitApi, "getVeggies"> = async () => {
   TestContext.current.setRequest("bubba", "gump");
-  const vegClient = TestContext.current.getClient<VegApi>("veg");
+  const vegClient = ServiceClient.create<VegApi>("veg");
   return await vegClient.getKinds();
 };
 

@@ -97,23 +97,11 @@ const doErrors: Handler<FruitApi, "doErrors"> = async (type) => {
   }
 };
 
-// const getFromContext: Handler<FruitApi, "getFromContext"> = async (key) => {
-//   TestContext.current.setRequest("private", "only4me");
-
-//   if (getMyData() !== "only4me") {
-//     throw new Error("Did not get private data");
-//   }
-
-//   return TestContext.current.get(key);
-// };
-
-// const getMyData = (): string | undefined => {
-//   return TestContext.current.get("private");
-// };
-
 const getVeggies: Handler<FruitApi, "getVeggies"> = async () => {
   TestContext.current.setRequest("bubba", "gump");
-  const vegClient = Context.current.getClient<VegApi>("vegWs");
+
+  const vegClient = ServiceClient.create<VegApi>("vegWs");
+
   return await vegClient.getKinds();
 };
 

@@ -1,7 +1,8 @@
+import assert from "node:assert";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { v4 as uuid } from "uuid";
 import type { ApiNotificationMessage, NotifyApi } from "./api/ApiMessage";
-import type { ServiceApi } from "./Service";
-import type { DefaultClient } from "./ServiceClient";
+import ServiceClient from "./ServiceClient";
 
 // This is typed as `unknown`. Casting is done as needed.
 const contextLocalStorage = new AsyncLocalStorage();
@@ -20,34 +21,67 @@ interface SerializableObject {
 }
 
 export interface RequestContext {
-  originDomain: string;
+  originDomain?: string;
 }
 
 export interface SessionContext {
-  connectionId: string;
-  langs: string[];
-  identity: string;
+  connectionId?: string;
+  langs?: string[];
+  identity?: string;
 }
 
-const initializers = new Set<(context: unknown) => Promise<void>>();
+interface ContextEvents<R extends RequestContext, S extends SessionContext> {
+  enter: { context: Context<R, S> };
+  exit: { context: Context<R, S>; exitedContext: Context<R, S> };
+  "api:request": { domain: string; method: string; payload: unknown; context: Context<R, S> };
+  "service:request": { domain: string; method: string; payload: unknown; context: Context<R, S> };
+}
+
+const eventListeners = new Map<
+  keyof ContextEvents<RequestContext, SessionContext>,
+  Set<(payload: unknown) => Promise<void>>
+>();
+
+export const dispatchContextEvent = async <
+  K extends keyof ContextEvents<R, S>,
+  R extends RequestContext,
+  S extends SessionContext,
+>(
+  event: K,
+  payload: Omit<ContextEvents<R, S>[K], "context">,
+): Promise<void> => {
+  const listeners = eventListeners.get(event);
+  if (listeners) {
+    await Promise.all(
+      Array.from(listeners).map((listener) =>
+        listener({
+          ...payload,
+          context: "exitedContext" in payload ? payload.exitedContext : DefaultContext.current,
+        }),
+      ),
+    );
+  }
+};
 
 class Context<R extends RequestContext, S extends SessionContext> {
-  private _requestContext: Partial<R>;
-  private _sessionContext: Partial<S>;
+  public readonly id = uuid().replace(/[^\w]/g, "");
+  public state: "current" | "exited" | "detached" = "current";
+  private _requestContext: R;
+  private _sessionContext: S;
+  public readonly parentContext: Context<RequestContext, SessionContext> | undefined;
   private extensions = new Set<(context: Context<R, S>) => unknown>();
 
-  public constructor(requestContext: Partial<R>, sessionContext: Partial<S>) {
+  public constructor(
+    requestContext: R,
+    sessionContext: S,
+    options?: { parentContext?: Context<RequestContext, SessionContext>; isDetached?: boolean },
+  ) {
     this._requestContext = requestContext;
     this._sessionContext = sessionContext;
-  }
+    this.parentContext = options?.parentContext;
 
-  public async init() {
-    for (const init of initializers) {
-      try {
-        await init(this);
-      } catch (err) {
-        console.error("Error during context initialization:", err);
-      }
+    if (options?.isDetached) {
+      this.state = "detached";
     }
   }
 
@@ -64,7 +98,7 @@ class Context<R extends RequestContext, S extends SessionContext> {
 
     const descriptors = Object.getOwnPropertyDescriptors(extFn(this));
     for (const key in descriptors) {
-      if (key !== "init" && descriptors[key]) {
+      if (descriptors[key]) {
         Object.defineProperty(this, key, descriptors[key]);
       }
     }
@@ -76,12 +110,6 @@ class Context<R extends RequestContext, S extends SessionContext> {
 
   public get sessionContext() {
     return this._sessionContext;
-  }
-
-  public getClient<T extends ServiceApi<D>, D extends string = T["domain"]>(
-    domain: D,
-  ): T["handlers"] & DefaultClient {
-    throw new Error(`No client for domain ${domain}`);
   }
 
   /**
@@ -100,15 +128,16 @@ class Context<R extends RequestContext, S extends SessionContext> {
     if (!recip) {
       throw new Error("No recipient set and could not derive one.");
     }
-    return this.getClient<NotifyApi>("_phnq-api").notify({
+    const apiClient = ServiceClient.create<NotifyApi>("_phnq-api");
+    return apiClient.notify({
       recipient: recip,
       payload,
       domain: this.domain,
     });
   }
 
-  public get<K extends keyof R>(key: K): Partial<R>[K];
-  public get<K extends keyof S>(key: K): Partial<S>[K];
+  public get<K extends keyof R>(key: K): R[K];
+  public get<K extends keyof S>(key: K): S[K];
   public get<K extends keyof (R & S)>(key: K) {
     if (key in this._requestContext) {
       return this._requestContext[key as keyof R];
@@ -126,7 +155,7 @@ class Context<R extends RequestContext, S extends SessionContext> {
     this._sessionContext = { ...(this._sessionContext ?? {}), [key]: val };
   }
 
-  public merge(sessionContext: Partial<SessionContext>) {
+  public merge(sessionContext: SessionContext) {
     this._sessionContext = { ...this._sessionContext, ...sessionContext };
   }
 
@@ -148,14 +177,15 @@ class Context<R extends RequestContext, S extends SessionContext> {
 }
 
 export interface ContextFactory<X1, R extends RequestContext, S extends SessionContext> {
-  enter(r: Partial<R>, s: Partial<S>): Promise<void>;
+  enter(r: R, s: S): Promise<void>;
   exit(): void;
-  apply<T>(r: Partial<R>, s: Partial<S>, fn: () => Promise<T>): Promise<T>;
+  apply<T>(r: R, s: S, fn: () => Promise<T>): Promise<T>;
   current: Context<R, S> & X1;
-  extend<X2 extends { init?: () => Promise<void> } | object>(
-    xFn: (context: Context<R, S>) => X2,
-  ): ContextFactory<X1 & X2, R, S>;
-  init: (initFn: (context: Context<R, S>) => Promise<void>) => void;
+  extend<X2>(xFn: (context: Context<R, S>) => X2): ContextFactory<X1 & X2, R, S>;
+  on: <K extends keyof ContextEvents<R, S>>(
+    event: K,
+    listener: (payload: ContextEvents<R, S>[K]) => Promise<void>,
+  ) => void;
 }
 
 export const createContextFactory = <
@@ -164,46 +194,62 @@ export const createContextFactory = <
   R extends RequestContext & RX = RequestContext & RX,
   S extends SessionContext & SX = SessionContext & SX,
 >(
-  extFn: (context: Context<R, S>) => { init?: () => Promise<void> } = () => ({}),
+  extFn: (context: Context<R, S>) => unknown = () => ({}),
 ) => {
-  const init = extFn(new Context({}, {})).init;
-  if (init) {
-    initializers.add(init);
-  }
-
   return {
     enter(r, s) {
-      const context = new Context(r, s);
+      const parentContext = contextLocalStorage.getStore() as
+        | Context<RequestContext, SessionContext>
+        | undefined;
+      const context = new Context(r, s, { parentContext });
       context.extend(extFn);
       contextLocalStorage.enterWith(context);
       return new Promise<void>((resolve, reject) => {
-        context
-          .init()
+        dispatchContextEvent("enter", {})
           .then(() => resolve())
           .catch((err) => reject(err));
       });
     },
     exit() {
-      contextLocalStorage.exit(() => {});
+      const context = contextLocalStorage.getStore() as
+        | Context<RequestContext, SessionContext>
+        | undefined;
+      contextLocalStorage.exit(async () => {
+        if (context) {
+          context.state = "exited";
+          await dispatchContextEvent("exit", { exitedContext: context });
+        }
+      });
     },
     async apply(r, s, fn) {
-      const context = new Context(r, s);
+      const parentContext = contextLocalStorage.getStore() as Context<
+        RequestContext,
+        SessionContext
+      >;
+
+      const context = new Context(r, s, { parentContext });
       context.extend(extFn);
       return new Promise((resolve, reject) => {
-        contextLocalStorage.run(context, async () => {
-          await context.init();
-          try {
-            const result = await fn();
-            resolve(result);
-          } catch (err) {
-            reject(err);
-          }
-        });
+        contextLocalStorage
+          .run(context, async () => {
+            await dispatchContextEvent("enter", {});
+            try {
+              const result = await fn();
+              resolve(result);
+            } catch (err) {
+              reject(err);
+            }
+          })
+          .then(async () => {
+            context.state = "exited";
+            await dispatchContextEvent<"exit", R, S>("exit", { exitedContext: context });
+          });
       });
     },
 
     get current() {
-      const context = (contextLocalStorage.getStore() ?? new Context({}, {})) as Context<R, S>;
+      const context = (contextLocalStorage.getStore() ??
+        new Context({}, {}, { isDetached: true })) as Context<R, S>;
       context.extend(extFn);
       return context;
     },
@@ -212,8 +258,13 @@ export const createContextFactory = <
       return createContextFactory(xFn);
     },
 
-    init(initFn) {
-      initializers.add(initFn as (context: unknown) => Promise<void>);
+    on: (event, listener) => {
+      if (!eventListeners.has(event)) {
+        eventListeners.set(event, new Set());
+      }
+      const listeners = eventListeners.get(event);
+      assert(listeners, "Event listeners should be defined");
+      listeners.add(listener as (payload: unknown) => Promise<void>);
     },
   } as ContextFactory<object, R, S>;
 };

@@ -4,7 +4,11 @@ import https from "node:https";
 import { createLogger } from "@phnq/log";
 import { Anomaly, type MessageConnection, WebSocketMessageServer } from "@phnq/message";
 
-import Context, { type RequestContext, type SessionContext } from "../Context";
+import Context, {
+  dispatchContextEvent,
+  type RequestContext,
+  type SessionContext,
+} from "../Context";
 import { API_SERVICE_DOMAIN } from "../domains";
 import Service from "../Service";
 import ServiceClient from "../ServiceClient";
@@ -201,6 +205,8 @@ class ApiService extends Service<NotifyApi> {
     }>(domain);
 
     return Context.apply(requestContext, sessionContext, async () => {
+      await dispatchContextEvent("api:request", { domain, method, payload });
+
       const response = await serviceClient[method]?.(payload);
       if (
         typeof response === "object" &&
