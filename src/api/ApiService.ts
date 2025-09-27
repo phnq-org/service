@@ -196,8 +196,6 @@ class ApiService extends Service<NotifyApi> {
     const { transformRequestPayload = (p) => p, transformResponsePayload = (p) => p } =
       this.apiServiceConfig;
 
-    const payload = transformRequestPayload(payloadRaw, requestMessage);
-
     const requestContext: Partial<RequestContext> = {
       originDomain: domain,
     };
@@ -213,6 +211,8 @@ class ApiService extends Service<NotifyApi> {
     }>(domain);
 
     return Context.apply(requestContext, sessionContext, async () => {
+      const payload = transformRequestPayload(payloadRaw, requestMessage);
+
       await dispatchContextEvent("api:request", { domain, method, payload });
 
       const response = await serviceClient[method]?.(payload);
