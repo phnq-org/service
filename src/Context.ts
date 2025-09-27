@@ -26,6 +26,7 @@ export interface RequestContext {
 
 export interface SessionContext {
   connectionId?: string;
+  connectionPath?: string;
   langs?: string[];
   identity?: string;
 }

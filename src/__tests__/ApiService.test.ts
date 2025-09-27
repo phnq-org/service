@@ -14,7 +14,7 @@ const TestContext = createContextFactory<{
   private: string;
 }>();
 
-const apiService = new ApiService({ port: 55777 });
+const apiService = new ApiService({ port: 55777, paths: ["/", "/v2"] });
 
 interface FruitNotification {
   type: "bubba";
@@ -35,6 +35,11 @@ const fruitWsClient = ApiClient.create<FruitApi, FruitNotification>(
   (n) => {
     notificationsFruit.push(n);
   },
+);
+
+const fruitWsClientV2 = ApiClient.create<FruitApi, FruitNotification>(
+  "fruitWs",
+  "ws://localhost:55777/v2",
 );
 
 const fruitClient = ServiceClient.create<FruitApi>("fruitWs");
@@ -75,6 +80,7 @@ interface FruitApi {
     // getFromContext(key: string): Promise<Serializable | undefined>;
     getVeggies(): Promise<string[]>;
     _noAccess(): Promise<string>;
+    getApiVersion(): Promise<"v1" | "v2">;
   };
 }
 
@@ -109,8 +115,13 @@ const _noAccess: Handler<FruitApi, "_noAccess"> = async () => {
   return "secret";
 };
 
+const getApiVersion: Handler<FruitApi, "getApiVersion"> = async () => {
+  const path = Context.current.get("connectionPath");
+  return path === "/v2" ? "v2" : "v1";
+};
+
 const fruitService = new Service<FruitApi>("fruitWs", {
-  handlers: { getKinds, getKindsIterator, doErrors, getVeggies, _noAccess },
+  handlers: { getKinds, getKindsIterator, doErrors, getVeggies, _noAccess, getApiVersion },
 });
 
 const notificationsFruit: FruitNotification[] = [];
@@ -219,5 +230,10 @@ describe("ApiService", () => {
   it("Does allow access to methods starting with underscore (via ServiceClient)", async () => {
     const secret = await fruitClient._noAccess();
     expect(secret).toBe("secret");
+  });
+
+  it("Correctly identifies the connection path", async () => {
+    expect(await fruitWsClient.getApiVersion()).toBe("v1");
+    expect(await fruitWsClientV2.getApiVersion()).toBe("v2");
   });
 });

@@ -1,9 +1,9 @@
+import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
 import { createLogger } from "@phnq/log";
 import { Anomaly, type MessageConnection, WebSocketMessageServer } from "@phnq/message";
-
 import Context, {
   dispatchContextEvent,
   type RequestContext,
@@ -22,6 +22,7 @@ interface Config {
   transformResponsePayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   transformRequestPayload?: (payload: unknown, message: ApiRequestMessage) => unknown;
   path?: string;
+  paths?: string[];
   pingPath?: string;
   logConnections?: boolean;
 }
@@ -65,7 +66,11 @@ class ApiService extends Service<NotifyApi> {
 
     this.apiServiceConfig = config;
 
-    const { path = "/", pingPath = path, secure } = config;
+    const { path, paths, pingPath = path ?? paths?.[0] ?? "/", secure } = config;
+
+    if (path && paths) {
+      throw new Error("Cannot specify both 'path' and 'paths'");
+    }
 
     if (secure) {
       const { keyPath, certPath } = config as SecureConfig;
@@ -83,6 +88,7 @@ class ApiService extends Service<NotifyApi> {
       SessionContext
     >({
       path,
+      paths,
       httpServer: this.httpServer,
     });
     this.httpServer.on("request", (req, res) => {
@@ -157,6 +163,11 @@ class ApiService extends Service<NotifyApi> {
     if (this.apiServiceConfig.logConnections) {
       log("Connected:", conn.id);
     }
+
+    assert(req.url, "Request URL is required");
+
+    conn.setAttribute("connectionId", conn.id);
+    conn.setAttribute("connectionPath", req.url);
     conn.setAttribute("langs", getLangs(req));
   }
 
@@ -191,10 +202,7 @@ class ApiService extends Service<NotifyApi> {
       originDomain: domain,
     };
 
-    const sessionContext: Partial<SessionContext> = {
-      ...conn.attributes,
-      connectionId: conn.id,
-    };
+    const sessionContext = conn.attributes;
 
     const serviceClient = ServiceClient.get<{
       domain: typeof domain;

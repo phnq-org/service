@@ -5,7 +5,7 @@
       "name": "@phnq/service",
       "dependencies": {
         "@phnq/log": "^1.1.5",
-        "@phnq/message": "^2.0.3",
+        "@phnq/message": "^2.0.4",
         "crypto-random-string": "^3.3.1",
         "md5": "^2.3.0",
         "nats": "^2.9.1",
@@ -52,7 +52,7 @@
 
     "@phnq/log": ["@phnq/log@1.1.6", "", { "dependencies": { "chalk": "^2.4.2" } }, "sha512-6n91g71eI+SF/m2dRNO9hvSoGdeecqkJsj+n7LMVUJiKV/otakCUo9hVl0TDktHEx/XXdLp9yatIji0cfhZAYQ=="],
 
-    "@phnq/message": ["@phnq/message@2.0.3", "", { "dependencies": { "@phnq/log": "^1.1.7", "@phnq/streams": "^1.1.6", "browser-process-hrtime": "^1.0.0", "isomorphic-ws": "^5.0.0", "nats": "^2.29.3", "node-fetch": "^3.3.2", "object-hash": "^3.0.0", "uuid": "^9.0.1", "ws": "^8.18.3" } }, "sha512-7kxStmumpkLjL0EWQkdGeIO/1dDxpzwAeEyBVh3kzZQkEGIn7pWWv6s7jDuRXyXMLmZzRrq2Zmq+H519n13/Zw=="],
+    "@phnq/message": ["@phnq/message@2.0.4", "", { "dependencies": { "@phnq/log": "^1.1.7", "@phnq/streams": "^1.1.6", "browser-process-hrtime": "^1.0.0", "isomorphic-ws": "^5.0.0", "nats": "^2.29.3", "node-fetch": "^3.3.2", "object-hash": "^3.0.0", "uuid": "^9.0.1", "ws": "^8.18.3" } }, "sha512-LDf/8n3xMIkrMagSqmOFS0hdrHQMBYL/keOBQ163xF1qLRL0Un3iaRF7RENluOv0rmtwcIIgk7qS0ZCzIxJfwg=="],
 
     "@phnq/streams": ["@phnq/streams@1.1.6", "", {}, "sha512-mAhPRD+OFXbkwnfpBq7fG/MEUfwuWZ9L6VwOyT1grdo2Oq6OvhjptDwFZbH1bc1hNlLDVkdU1VMyZun8T/gmRg=="],
 

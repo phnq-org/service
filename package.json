@@ -1,6 +1,6 @@
 {
   "name": "@phnq/service",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Utilities for building microservices systems.",
   "main": "dist/index.js",
   "repository": {
@@ -12,7 +12,7 @@
     "clean": "rimraf dist *.tsbuildinfo",
     "prelint": "tsc -b",
     "lint": "biome check src",
-    "release": "bun run dist && bun test && bun publish",
+    "release": "bun run clean && bun run dist && bun test && bun publish",
     "test:nats": "PHNQ_SERVICE_NATS=nats://localhost:${NATS_PORT:=4224} PHNQ_SERVICE_NATS_MONITOR=http://localhost:${NATS_MONITOR_PORT:=8224} PHNQ_SERVICE_SIGN_SALT=abcd1234 bun test",
     "pretest:nats": "if [ \"$CI\" != \"1\" ]; then podman run -d --name nats_phnq_service_test -p 4224:4222 -p8224:8222 nats; fi",
     "posttest:nats": "if [ \"$CI\" != \"1\" ]; then podman stop nats_phnq_service_test; podman rm nats_phnq_service_test; fi"
@@ -24,7 +24,7 @@
   "license": "ISC",
   "dependencies": {
     "@phnq/log": "^1.1.5",
-    "@phnq/message": "^2.0.3",
+    "@phnq/message": "^2.0.4",
     "crypto-random-string": "^3.3.1",
     "md5": "^2.3.0",
     "nats": "^2.9.1",
