@@ -12,6 +12,7 @@ import {
   NATSTransport,
   type NATSTransportConnectionOptions,
 } from "@phnq/message";
+import chalk from "chalk";
 import type { ConnectionOptions } from "nats";
 import { v4 as uuid } from "uuid";
 import Context, { dispatchContextEvent, type SessionContext } from "./Context";
@@ -24,6 +25,8 @@ import type {
   ServiceResponseMessage,
 } from "./ServiceMessage";
 import ServiceStats, { type HandlerStatsReport, type Stats } from "./ServiceStats";
+
+const log = createLogger("Service");
 
 const getNatsOptions = (
   nats?: NATSTransportConnectionOptions,
@@ -61,6 +64,7 @@ export interface ServiceConfig<T extends ServiceApi<D>, D extends string = T["do
   handlers?: {
     [H in keyof T["handlers"]]: Handler<T, H, D>;
   };
+  timeLogFilter?: (method: keyof T["handlers"]) => boolean;
 }
 
 export type Handler<
@@ -85,6 +89,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
     (arg: unknown, service: Service<T>) => Promise<unknown | AsyncIterableIterator<unknown>>
   >;
   private connected = true;
+  private timeLogFilter: (method: keyof T["handlers"]) => boolean;
 
   public constructor(domain: D, config: ServiceConfig<T> = {}) {
     this.log = createLogger(`${domain}${config.handlers === undefined ? ".client" : ""}`);
@@ -97,6 +102,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
       getStats: async () => this.stats,
     });
     this.connection = this.getConnection();
+    this.timeLogFilter = config.timeLogFilter ?? ((method) => method !== "ping");
   }
 
   public get isConnected(): boolean {
@@ -385,6 +391,8 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
     if (handler) {
       await dispatchContextEvent("service:request", { domain, method, payload });
 
+      const timeLogFilter = this.timeLogFilter;
+
       try {
         const response = await handler(payload, this);
         if (
@@ -409,10 +417,14 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                   sessionContext: Context.current.sessionContext as SessionContext,
                 };
               }
+              const time = Number(process.hrtime.bigint() - start) / 1_000_000;
               stats.record(domain, method, {
-                time: Number(process.hrtime.bigint() - start) / 1_000_000,
+                time,
                 numResponses,
               });
+              if (timeLogFilter(method)) {
+                log(chalk.grey(`[${time.toFixed(2)}ms]`), `${domain}.${method}`);
+              }
             } finally {
               Context.exit();
             }
@@ -420,6 +432,11 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
         } else {
           const time = Number(process.hrtime.bigint() - start) / 1_000_000;
           stats.record(domain, method, { time });
+
+          if (timeLogFilter(method)) {
+            log(chalk.grey(`[${time.toFixed(2)}ms]`), `${domain}.${method}`);
+          }
+
           return {
             origin,
             payload: response,

@@ -189,12 +189,12 @@ class ApiService extends Service<NotifyApi> {
     conn: MessageConnection<ApiRequestMessage, ApiResponseMessage, SessionContext>,
     requestMessage: ApiRequestMessage,
   ): Promise<ApiResponseMessage | AsyncIterableIterator<ApiResponseMessage>> {
+    const { transformRequestPayload = (p) => p, transformResponsePayload = (p) => p } =
+      this.apiServiceConfig;
+
     const { domain, method, payload: payloadRaw } = requestMessage;
 
     this.checkAccess(domain, method);
-
-    const { transformRequestPayload = (p) => p, transformResponsePayload = (p) => p } =
-      this.apiServiceConfig;
 
     const requestContext: Partial<RequestContext> = {
       originDomain: domain,
