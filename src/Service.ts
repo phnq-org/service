@@ -423,7 +423,11 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                 numResponses,
               });
               if (timeLogFilter(method)) {
-                log(chalk.grey(`[${time.toFixed(2)}ms]`), `${domain}.${method}`);
+                log(
+                  chalk.grey(`[${time.toFixed(2)}ms]`),
+                  `${domain}.${method}`,
+                  chalk.grey(formatPayload(payload)),
+                );
               }
             } finally {
               Context.exit();
@@ -434,7 +438,11 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
           stats.record(domain, method, { time });
 
           if (timeLogFilter(method)) {
-            log(chalk.grey(`[${time.toFixed(2)}ms]`), `${domain}.${method}`);
+            log(
+              chalk.grey(`[${time.toFixed(2)}ms]`),
+              `${domain}.${method}`,
+              chalk.grey(formatPayload(payload)),
+            );
           }
 
           return {
@@ -478,6 +486,18 @@ const DEFAULT_TRANSPORT = {
 
 const isDefined = <T = unknown>(val: T | undefined | null): val is T =>
   val !== undefined && val !== null;
+
+const formatPayload = (payload: unknown): string => {
+  if (!isDefined(payload)) {
+    return "";
+  }
+
+  const json = JSON.stringify(payload);
+  if (json.length < 60) {
+    return json;
+  }
+  return ["\n", JSON.stringify(payload, null, 2)].join("");
+};
 
 // const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
