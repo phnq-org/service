@@ -64,7 +64,7 @@ export interface ServiceConfig<T extends ServiceApi<D>, D extends string = T["do
   handlers?: {
     [H in keyof T["handlers"]]: Handler<T, H, D>;
   };
-  timeLogFilter?: (method: keyof T["handlers"]) => boolean;
+  timeLogFilter?: (method: keyof T["handlers"]) => "none" | "compact" | "full";
 }
 
 export type Handler<
@@ -89,7 +89,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
     (arg: unknown, service: Service<T>) => Promise<unknown | AsyncIterableIterator<unknown>>
   >;
   private connected = true;
-  private timeLogFilter: (method: keyof T["handlers"]) => boolean;
+  private timeLogFilter: (method: keyof T["handlers"]) => "none" | "compact" | "full";
 
   public constructor(domain: D, config: ServiceConfig<T> = {}) {
     this.log = createLogger(`${domain}${config.handlers === undefined ? ".client" : ""}`);
@@ -102,7 +102,8 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
       getStats: async () => this.stats,
     });
     this.connection = this.getConnection();
-    this.timeLogFilter = config.timeLogFilter ?? ((method) => method !== "ping");
+    this.timeLogFilter =
+      config.timeLogFilter ?? ((method) => (method === "ping" ? "none" : "compact"));
   }
 
   public get isConnected(): boolean {
@@ -391,7 +392,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
     if (handler) {
       await dispatchContextEvent("service:request", { domain, method, payload });
 
-      const timeLogFilter = this.timeLogFilter;
+      const filterMode = this.timeLogFilter(method);
 
       try {
         const response = await handler(payload, this);
@@ -422,11 +423,13 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                 time,
                 numResponses,
               });
-              if (timeLogFilter(method)) {
+              if (filterMode !== "none") {
                 log(
                   chalk.grey(`[${time.toFixed(2)}ms]`),
                   `${domain}.${method}`,
-                  chalk.grey(formatPayload(payload)),
+                  chalk.grey(formatPayload(payload, 60, filterMode === "compact")),
+                  "\n->",
+                  chalk.grey.italic("AsyncIterableIterator"),
                 );
               }
             } finally {
@@ -437,11 +440,13 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
           const time = Number(process.hrtime.bigint() - start) / 1_000_000;
           stats.record(domain, method, { time });
 
-          if (timeLogFilter(method)) {
+          if (filterMode !== "none") {
             log(
               chalk.grey(`[${time.toFixed(2)}ms]`),
               `${domain}.${method}`,
-              chalk.grey(formatPayload(payload)),
+              chalk.grey(formatPayload(payload, 60, filterMode === "compact")),
+              "\n->",
+              chalk.grey(formatPayload(response, 120, filterMode === "compact")),
             );
           }
 
@@ -487,14 +492,16 @@ const DEFAULT_TRANSPORT = {
 const isDefined = <T = unknown>(val: T | undefined | null): val is T =>
   val !== undefined && val !== null;
 
-const formatPayload = (payload: unknown): string => {
+const formatPayload = (payload: unknown, maxLen: number, truncate: boolean): string => {
   if (!isDefined(payload)) {
-    return "";
+    return "undefined";
   }
 
   const json = JSON.stringify(payload);
-  if (json.length < 60) {
+  if (json.length < maxLen) {
     return json;
+  } else if (truncate) {
+    return `${json.slice(0, maxLen)}...`;
   }
   return ["\n", JSON.stringify(payload, null, 2)].join("");
 };
