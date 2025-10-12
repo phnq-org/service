@@ -36,6 +36,20 @@ interface ContextEvents<R extends RequestContext, S extends SessionContext> {
   exit: { context: Context<R, S>; exitedContext: Context<R, S> };
   "api:request": { domain: string; method: string; payload: unknown; context: Context<R, S> };
   "service:request": { domain: string; method: string; payload: unknown; context: Context<R, S> };
+  "api:error": {
+    error: unknown;
+    domain: string;
+    method: string;
+    payload: unknown;
+    context: Context<R, S>;
+  };
+  "service:error": {
+    error: unknown;
+    domain: string;
+    method: string;
+    payload: unknown;
+    context: Context<R, S>;
+  };
 }
 
 const eventListeners = new Map<

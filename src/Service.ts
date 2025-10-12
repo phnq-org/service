@@ -242,9 +242,20 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
     }
 
     connection.onReceive = (message) =>
-      Context.apply(message.requestContext, message.sessionContext, () =>
-        this.handleRequest(message),
-      );
+      Context.apply(message.requestContext, message.sessionContext, async () => {
+        try {
+          return await this.handleRequest(message);
+        } catch (err) {
+          this.log.error(`Error handling request [${domain}.${message.method}]`).stack(err);
+          await dispatchContextEvent("service:error", {
+            error: err,
+            domain: message.domain,
+            method: message.method,
+            payload: message.payload,
+          });
+          throw err;
+        }
+      });
 
     return connection;
   }
@@ -465,7 +476,6 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
           time: Number(process.hrtime.bigint() - start) / 1_000_000,
           error: true,
         });
-        this.log.error(`Error handling request [${domain}.${method}]`).stack(err);
 
         if (err instanceof ServiceError && err.type !== "server-error") {
           throw new Anomaly(err.message, err.payload);

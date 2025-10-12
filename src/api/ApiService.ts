@@ -210,32 +210,37 @@ class ApiService extends Service<NotifyApi> {
       >;
     }>(domain);
 
+    const payload = transformRequestPayload(payloadRaw, requestMessage);
+
     return Context.apply(requestContext, sessionContext, async () => {
-      const payload = transformRequestPayload(payloadRaw, requestMessage);
+      try {
+        await dispatchContextEvent("api:request", { domain, method, payload });
 
-      await dispatchContextEvent("api:request", { domain, method, payload });
-
-      const response = await serviceClient[method]?.(payload);
-      if (
-        typeof response === "object" &&
-        (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]
-      ) {
-        return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
-          await Context.enter(requestContext, sessionContext);
-          for await (const payload of response as AsyncIterableIterator<unknown>) {
-            yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
-          }
+        const response = await serviceClient[method]?.(payload);
+        if (
+          typeof response === "object" &&
+          (response as AsyncIterableIterator<unknown>)[Symbol.asyncIterator]
+        ) {
+          return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
+            await Context.enter(requestContext, sessionContext);
+            for await (const payload of response as AsyncIterableIterator<unknown>) {
+              yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
+            }
+            for (const [k, v] of Object.entries(Context.current.sessionContext)) {
+              conn.setAttribute(k as keyof SessionContext, v);
+            }
+            Context.exit();
+          })();
+        } else {
           for (const [k, v] of Object.entries(Context.current.sessionContext)) {
             conn.setAttribute(k as keyof SessionContext, v);
           }
-          Context.exit();
-        })();
-      } else {
-        for (const [k, v] of Object.entries(Context.current.sessionContext)) {
-          conn.setAttribute(k as keyof SessionContext, v);
-        }
 
-        return { payload: transformResponsePayload(response, requestMessage), stats: 0 };
+          return { payload: transformResponsePayload(response, requestMessage), stats: 0 };
+        }
+      } catch (err) {
+        await dispatchContextEvent("api:error", { error: err, domain, method, payload });
+        throw err;
       }
     });
   }
