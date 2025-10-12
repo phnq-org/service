@@ -50,6 +50,7 @@ interface FruitApi {
     doErrors(type: "error" | "anomaly" | "none"): Promise<void>;
     getFromContext(key: string): Promise<Serializable | undefined>;
     getVeggies(): Promise<string[]>;
+    getUnavailable(): Promise<"unavailable">;
   };
 }
 
@@ -96,8 +97,13 @@ const getVeggies: Handler<FruitApi, "getVeggies"> = async () => {
   return await vegClient.getKinds();
 };
 
+const getUnavailable: Handler<FruitApi, "getUnavailable"> = async () => {
+  return "unavailable";
+};
+
 const fruitService = new Service<FruitApi>("fruit", {
-  handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies },
+  handlers: { getKinds, getKindsIterator, doErrors, getFromContext, getVeggies, getUnavailable },
+  isHandlerAvailable: (method) => method !== "getUnavailable",
 });
 
 const fruitClient = ServiceClient.create<FruitApi>("fruit");
@@ -164,19 +170,6 @@ describe("Service", () => {
     }
   });
 
-  // it('throws when testing latency without a domain', async () => {
-  //   const anonService = new Service(null);
-
-  //   try {
-  //     await anonService.testLatency();
-  //     fail('should have thrown');
-  //   } catch (err) {
-  //     // nothing
-  //   }
-
-  //   await anonService.disconnect();
-  // });
-
   it("returns client connected state", async () => {
     const client = ServiceClient.create<FruitApi>("fruit");
     // client is connected on create.
@@ -238,6 +231,12 @@ describe("Service", () => {
 
   it("uses client from service handler", async () => {
     expect(await fruitClient.getVeggies()).toStrictEqual(["carrot", "celery", "broccoli"]);
+  });
+
+  it("should throw if method is unavailable", async () => {
+    expect(async () => {
+      await fruitClient.getUnavailable();
+    }).toThrow("No handler for method: fruit.getUnavailable");
   });
 
   if (NATS_MONITOR_URI) {

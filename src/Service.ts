@@ -65,6 +65,7 @@ export interface ServiceConfig<T extends ServiceApi<D>, D extends string = T["do
     [H in keyof T["handlers"]]: Handler<T, H, D>;
   };
   timeLogFilter?: (method: keyof T["handlers"]) => "none" | "compact" | "full";
+  isHandlerAvailable?: (method: keyof T["handlers"]) => boolean;
 }
 
 export type Handler<
@@ -388,8 +389,10 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
 
     const stats = this.serviceStats;
 
+    const isHandlerAvailable = this.config.isHandlerAvailable?.(method) ?? true;
+
     const handler = this.handlers[method];
-    if (handler) {
+    if (handler && isHandlerAvailable) {
       await dispatchContextEvent("service:request", { domain, method, payload });
 
       const filterMode = this.timeLogFilter(method);
