@@ -64,7 +64,9 @@ export interface ServiceConfig<T extends ServiceApi<D>, D extends string = T["do
   handlers?: {
     [H in keyof T["handlers"]]: Handler<T, H, D>;
   };
-  timeLogFilter?: (method: keyof T["handlers"]) => "none" | "compact" | "full";
+  timeLogFilter?: (
+    method: keyof (T["handlers"] & Omit<DefaultClient, "stats" | "isConnected">),
+  ) => "none" | "compact" | "full";
   isHandlerAvailable?: (method: keyof T["handlers"]) => boolean;
 }
 
