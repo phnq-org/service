@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pgostovic/service.git"
+    "url": "git+https://github.com/phnq-org/service.git"
   },
   "scripts": {
     "dist": "bun build --production ./src/index.ts --outdir ./dist --target node --packages=external; tsc --project tsconfig.types.json",
