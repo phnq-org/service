@@ -90,7 +90,9 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
     (arg: unknown, service: Service<T>) => Promise<unknown | AsyncIterableIterator<unknown>>
   >;
   private connected = true;
-  private timeLogFilter: (method: keyof T["handlers"]) => "none" | "compact" | "full";
+  private timeLogFilter: (
+    method: keyof (T["handlers"] & Omit<DefaultClient, "stats" | "isConnected">),
+  ) => "none" | "compact" | "full";
 
   public constructor(domain: D, config: ServiceConfig<T> = {}) {
     this.log = createLogger(`${domain}${config.handlers === undefined ? ".client" : ""}`);
