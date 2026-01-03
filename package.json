@@ -1,14 +1,27 @@
 {
   "name": "@phnq/service",
-  "version": "2.2.8",
+  "version": "2.3.0",
   "description": "Utilities for building microservices systems.",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "browser": "./dist/browser.js",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "browser": "./dist/browser.js",
+        "default": "./dist/index.js"
+      }
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/phnq-org/service.git"
   },
   "scripts": {
-    "dist": "bun build --production ./src/index.ts --outdir ./dist --target node --packages=external; tsc --project tsconfig.types.json",
+    "dist": "bun build --production ./src/index.ts --outdir=./dist --target=node --packages=external; tsc --project tsconfig.types.json",
+    "postdist": "bun build --production ./src/browser.ts --outdir=./dist --target=browser --minify",
     "clean": "rimraf dist *.tsbuildinfo",
     "prelint": "tsc -b",
     "lint": "biome check src",
@@ -24,7 +37,7 @@
   "license": "ISC",
   "dependencies": {
     "@phnq/log": "^1.1.5",
-    "@phnq/message": "^2.0.4",
+    "@phnq/message": "^2.1.0",
     "crypto-random-string": "^3.3.1",
     "md5": "^2.3.0",
     "nats": "^2.9.1",
