@@ -37,6 +37,7 @@ class ApiService extends Service<NotifyApi> {
   private apiServiceConfig: Config | SecureConfig;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, SessionContext>;
   private readonly _httpServer: http.Server;
+  private subscriptions: { connectionId: string; topic: string }[] = [];
   public onHttpRequest: (
     req: http.IncomingMessage,
     res: http.ServerResponse<http.IncomingMessage> & {
@@ -52,14 +53,29 @@ class ApiService extends Service<NotifyApi> {
       ...config,
       handlers: {
         notify: async (m) => {
-          const conn = this.wsServer.getConnection(m.recipient.id);
-          if (conn) {
-            conn.send({
-              domain: m.domain || API_SERVICE_DOMAIN,
-              method: "notify",
-              payload: m.payload,
-            });
+          const connectionId = this.subscriptions.find(
+            (s) => s.topic === m.recipient.topic,
+          )?.connectionId;
+          if (connectionId) {
+            const conn = this.wsServer.getConnection(connectionId);
+            if (conn) {
+              conn.send({
+                domain: m.domain || API_SERVICE_DOMAIN,
+                method: "notify",
+                payload: m.payload,
+              });
+            }
           }
+        },
+
+        subscribe: async ({ connectionId, topic }) => {
+          this.subscriptions.push({ connectionId, topic });
+        },
+
+        unsubscribe: async ({ connectionId, topic }) => {
+          this.subscriptions = this.subscriptions.filter(
+            (s) => s.connectionId === connectionId && s.topic === topic,
+          );
         },
       },
     });
@@ -169,6 +185,8 @@ class ApiService extends Service<NotifyApi> {
     conn.setAttribute("connectionId", conn.id);
     conn.setAttribute("connectionPath", req.url);
     conn.setAttribute("langs", getLangs(req));
+
+    this.subscriptions.push({ connectionId: conn.id, topic: conn.id });
   }
 
   private async onDisconnect(
@@ -177,6 +195,8 @@ class ApiService extends Service<NotifyApi> {
     if (this.apiServiceConfig.logConnections) {
       log("Disconnected:", conn.id);
     }
+
+    this.subscriptions = this.subscriptions.filter((s) => s.connectionId !== conn.id);
   }
 
   private checkAccess(domain: string, method: string): void {

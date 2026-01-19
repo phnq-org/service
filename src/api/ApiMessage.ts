@@ -18,7 +18,7 @@ export interface ApiNotificationMessage extends ApiMessage {
    * - identity: the user's identity (i.e. via authentication)
    * - subscription: the key for a subscription (i.e. via pub/sub)
    */
-  recipient: { id: string };
+  recipient: { topic: string };
   domain?: string;
 }
 
@@ -26,5 +26,7 @@ export interface NotifyApi {
   domain: "_phnq-api";
   handlers: {
     notify: (msg: ApiNotificationMessage) => Promise<void>;
+    subscribe: (subscription: { connectionId: string; topic: string }) => Promise<void>;
+    unsubscribe: (subscription: { connectionId: string; topic: string }) => Promise<void>;
   };
 }

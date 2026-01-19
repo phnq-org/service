@@ -23,14 +23,18 @@ interface AuthServiceConfig extends Omit<ServiceConfig<AuthApi>, "handlers"> {
    * @throws An error if authentication fails.
    */
   onAuthenticate?(authReq: unknown): Promise<{ identity: string; authResponse?: unknown }>;
+
+  onSuccess?(): Promise<void>;
 }
 
 class AuthService extends Service<AuthApi> {
   public readonly onAuthenticate: AuthServiceConfig["onAuthenticate"];
+  public readonly onSuccess: AuthServiceConfig["onSuccess"];
 
   public constructor(config: AuthServiceConfig) {
     super("phnq-auth", { ...config, handlers: { authenticate, clearIdentity } });
     this.onAuthenticate = config.onAuthenticate;
+    this.onSuccess = config.onSuccess;
   }
 }
 

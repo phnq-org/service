@@ -10,6 +10,9 @@ const authenticate: Handler<AuthApi, "authenticate"> = async (authReq, service) 
     try {
       const { identity, authResponse } = await authService.onAuthenticate(authReq);
       Context.current.setSession("identity", identity);
+
+      await authService.onSuccess?.();
+
       return { authenticated: true, identity, authResponse };
     } catch (err) {
       Context.current.setSession("identity", null);

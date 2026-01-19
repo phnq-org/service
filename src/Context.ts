@@ -127,6 +127,18 @@ class Context<R extends RequestContext, S extends SessionContext> {
     return this._sessionContext;
   }
 
+  public async subscribe(topic: string) {
+    const apiClient = ServiceClient.create<NotifyApi>("_phnq-api");
+    assert(this.connectionId, "No connection id");
+    await apiClient.subscribe({ connectionId: this.connectionId, topic });
+  }
+
+  public async unsubscribe(topic: string) {
+    const apiClient = ServiceClient.create<NotifyApi>("_phnq-api");
+    assert(this.connectionId, "No connection id");
+    await apiClient.unsubscribe({ connectionId: this.connectionId, topic });
+  }
+
   /**
    * Send a notification to the given recipient. The payload must have a `type` attribute.
    * If no recipient is provided, the notification will be sent as a push on the WebSocket
@@ -139,7 +151,7 @@ class Context<R extends RequestContext, S extends SessionContext> {
     payload: P,
     recipient?: ApiNotificationMessage["recipient"],
   ): Promise<void> {
-    const recip = recipient || (this.connectionId ? { id: this.connectionId } : undefined);
+    const recip = recipient ?? (this.connectionId ? { topic: this.connectionId } : undefined);
     if (!recip) {
       throw new Error("No recipient set and could not derive one.");
     }
