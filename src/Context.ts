@@ -128,14 +128,30 @@ class Context<R extends RequestContext, S extends SessionContext> {
     return this._sessionContext;
   }
 
+  /**
+   * Subscribe the current connection for WS push notifications on the specified topic.
+   * @param topic
+   */
   public async subscribe(topic: string) {
     assert(this.connectionId, "No connection id");
     await this.apiClient.subscribe({ connectionId: this.connectionId, topic });
   }
 
+  /**
+   * Unsubscribe the current connection from WS push notifications on the specified topic.
+   * @param topic
+   */
   public async unsubscribe(topic: string) {
     assert(this.connectionId, "No connection id");
     await this.apiClient.unsubscribe({ connectionId: this.connectionId, topic });
+  }
+
+  /**
+   * Unsubscribe all connections from WS push notifications on the specified topic.
+   * @param topic
+   */
+  public async destroyTopic(topic: string) {
+    await this.apiClient.destroyTopic({ topic });
   }
 
   /**
