@@ -85,6 +85,7 @@ class Context<R extends RequestContext, S extends SessionContext> {
   private _sessionContext: S;
   public readonly parentContext: Context<RequestContext, SessionContext> | undefined;
   private extensions = new Set<(context: Context<R, S>) => unknown>();
+  private apiClient = ServiceClient.create<NotifyApi>("_phnq-api");
 
   public constructor(
     requestContext: R,
@@ -128,15 +129,13 @@ class Context<R extends RequestContext, S extends SessionContext> {
   }
 
   public async subscribe(topic: string) {
-    const apiClient = ServiceClient.create<NotifyApi>("_phnq-api");
     assert(this.connectionId, "No connection id");
-    await apiClient.subscribe({ connectionId: this.connectionId, topic });
+    await this.apiClient.subscribe({ connectionId: this.connectionId, topic });
   }
 
   public async unsubscribe(topic: string) {
-    const apiClient = ServiceClient.create<NotifyApi>("_phnq-api");
     assert(this.connectionId, "No connection id");
-    await apiClient.unsubscribe({ connectionId: this.connectionId, topic });
+    await this.apiClient.unsubscribe({ connectionId: this.connectionId, topic });
   }
 
   /**

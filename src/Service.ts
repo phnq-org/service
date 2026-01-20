@@ -78,6 +78,7 @@ export type Handler<
 
 class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
   public readonly origin = uuid().replace(/[^\w]/g, "");
+  private isClientOnly: boolean;
   private log: Logger;
   private readonly serviceStats = new ServiceStats({
     filter: (_, m) => !["ping", "getStats"].includes(m),
@@ -97,7 +98,8 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
   ) => "none" | "compact" | "full";
 
   public constructor(domain: D, config: ServiceConfig<T> = {}) {
-    this.log = createLogger(`${domain}${config.handlers === undefined ? ".client" : ""}`);
+    this.isClientOnly = config.handlers === undefined;
+    this.log = createLogger(`${domain}${this.isClientOnly ? ".client" : ""}`);
     this.domain = domain;
     this.config = { ...config, nats: getNatsOptions(config.nats) };
     this.transport = DEFAULT_TRANSPORT;
@@ -156,7 +158,9 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
     const domain = this.domain;
 
     if (nats) {
-      this.log("Starting service with NATSTransport...");
+      if (!this.isClientOnly) {
+        this.log("Starting service with NATSTransport...");
+      }
       const subscriptions: Parameters<typeof NATSTransport.create>[1]["subscriptions"] = [
         this.origin,
       ];
@@ -209,9 +213,13 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
           },
         },
       );
-      this.log("Connected to NATS.");
+      if (!this.isClientOnly) {
+        this.log("Connected to NATS.");
+      }
     } else {
-      this.log("Starting service with LocalPubSubTransport...");
+      if (!this.isClientOnly) {
+        this.log("Starting service with LocalPubSubTransport...");
+      }
       this.transport = new LocalPubSubTransport<ServiceRequestMessage, ServiceResponseMessage>({
         /** See above for description of `subscriptions` */
         subscriptions: [this.origin, this.config.handlers ? domain : undefined].filter(isDefined),

@@ -28,5 +28,6 @@ export interface NotifyApi {
     notify: (msg: ApiNotificationMessage) => Promise<void>;
     subscribe: (subscription: { connectionId: string; topic: string }) => Promise<void>;
     unsubscribe: (subscription: { connectionId: string; topic: string }) => Promise<void>;
+    destroyTopic: (info: { topic: string }) => Promise<void>;
   };
 }

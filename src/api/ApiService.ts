@@ -53,29 +53,30 @@ class ApiService extends Service<NotifyApi> {
       ...config,
       handlers: {
         notify: async (m) => {
-          const connectionId = this.subscriptions.find(
-            (s) => s.topic === m.recipient.topic,
-          )?.connectionId;
-          if (connectionId) {
-            const conn = this.wsServer.getConnection(connectionId);
-            if (conn) {
-              conn.send({
-                domain: m.domain || API_SERVICE_DOMAIN,
-                method: "notify",
-                payload: m.payload,
-              });
-            }
+          const connections = this.subscriptions
+            .filter(({ topic }) => topic === m.recipient.topic)
+            .map((sub) => this.wsServer.getConnection(sub.connectionId))
+            .filter((conn) => !!conn);
+
+          for (const conn of connections) {
+            conn.send({
+              domain: m.domain || API_SERVICE_DOMAIN,
+              method: "notify",
+              payload: m.payload,
+            });
           }
         },
 
         subscribe: async ({ connectionId, topic }) => {
-          this.subscriptions.push({ connectionId, topic });
+          this.addSubscription({ connectionId, topic });
         },
 
         unsubscribe: async ({ connectionId, topic }) => {
-          this.subscriptions = this.subscriptions.filter(
-            (s) => s.connectionId === connectionId && s.topic === topic,
-          );
+          this.removeSubscription({ connectionId, topic });
+        },
+
+        destroyTopic: async ({ topic }) => {
+          this.removeAllSubscriptions({ topic });
         },
       },
     });
@@ -166,6 +167,35 @@ class ApiService extends Service<NotifyApi> {
     log("Stopped.");
   }
 
+  public logSubscriptions() {
+    log("subscriptipons", this.subscriptions);
+  }
+
+  private addSubscription(subscription: { connectionId: string; topic: string }) {
+    log("Adding subscription:", subscription);
+    this.subscriptions.push(subscription);
+  }
+
+  private removeSubscription(subscription: { connectionId: string; topic: string }) {
+    log("Removing subscription:", subscription);
+    const { connectionId, topic } = subscription;
+    this.subscriptions = this.subscriptions.filter(
+      (s) => !(s.connectionId === connectionId && s.topic === topic),
+    );
+  }
+
+  private removeAllSubscriptions({ connectionId }: { connectionId: string }): void;
+  private removeAllSubscriptions({ topic }: { topic: string }): void;
+  private removeAllSubscriptions(info: { topic: string } | { connectionId: string }) {
+    if ("topic" in info) {
+      log("Removing all subscriptions for topic", info.topic);
+      this.subscriptions = this.subscriptions.filter((s) => s.topic !== info.topic);
+    } else {
+      log("Removing all subscriptions for connectionId", info.connectionId);
+      this.subscriptions = this.subscriptions.filter((s) => s.connectionId !== info.connectionId);
+    }
+  }
+
   /**
    * This is where WebSocket connections are established. Both the initial
    * HTTP request and the underlying MessageConnection abstraction are available
@@ -186,7 +216,7 @@ class ApiService extends Service<NotifyApi> {
     conn.setAttribute("connectionPath", req.url);
     conn.setAttribute("langs", getLangs(req));
 
-    this.subscriptions.push({ connectionId: conn.id, topic: conn.id });
+    this.addSubscription({ connectionId: conn.id, topic: conn.id });
   }
 
   private async onDisconnect(
@@ -196,7 +226,7 @@ class ApiService extends Service<NotifyApi> {
       log("Disconnected:", conn.id);
     }
 
-    this.subscriptions = this.subscriptions.filter((s) => s.connectionId !== conn.id);
+    this.removeAllSubscriptions({ connectionId: conn.id });
   }
 
   private checkAccess(domain: string, method: string): void {
