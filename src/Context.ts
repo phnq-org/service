@@ -132,9 +132,9 @@ class Context<R extends RequestContext, S extends SessionContext> {
    * Subscribe the current connection for WS push notifications on the specified topic.
    * @param topic
    */
-  public async subscribe(topic: string) {
+  public async subscribe(topic: string, options?: { filter?(payload: unknown): boolean }) {
     assert(this.connectionId, "No connection id");
-    await this.apiClient.subscribe({ connectionId: this.connectionId, topic });
+    await this.apiClient.subscribe({ connectionId: this.connectionId, topic, options });
   }
 
   /**

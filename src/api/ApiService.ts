@@ -37,7 +37,11 @@ class ApiService extends Service<NotifyApi> {
   private apiServiceConfig: Config | SecureConfig;
   private wsServer: WebSocketMessageServer<ApiRequestMessage, ApiResponseMessage, SessionContext>;
   private readonly _httpServer: http.Server;
-  private subscriptions: { connectionId: string; topic: string }[] = [];
+  private subscriptions: {
+    connectionId: string;
+    topic: string;
+    options?: { filter?(payload: unknown): boolean };
+  }[] = [];
   public onHttpRequest: (
     req: http.IncomingMessage,
     res: http.ServerResponse<http.IncomingMessage> & {
@@ -54,7 +58,10 @@ class ApiService extends Service<NotifyApi> {
       handlers: {
         notify: async (m) => {
           const connections = this.subscriptions
-            .filter(({ topic }) => topic === m.recipient.topic)
+            .filter(
+              ({ topic, options }) =>
+                topic === m.recipient.topic && options?.filter?.(m.payload) !== false,
+            )
             .map((sub) => this.wsServer.getConnection(sub.connectionId))
             .filter((conn) => !!conn);
 
@@ -67,8 +74,8 @@ class ApiService extends Service<NotifyApi> {
           }
         },
 
-        subscribe: async ({ connectionId, topic }) => {
-          this.addSubscription({ connectionId, topic });
+        subscribe: async ({ connectionId, topic, options }) => {
+          this.addSubscription({ connectionId, topic, options });
         },
 
         unsubscribe: async ({ connectionId, topic }) => {
@@ -171,7 +178,11 @@ class ApiService extends Service<NotifyApi> {
     log("subscriptipons", this.subscriptions);
   }
 
-  private addSubscription(subscription: { connectionId: string; topic: string }) {
+  private addSubscription(subscription: {
+    connectionId: string;
+    topic: string;
+    options?: { filter?(payload: unknown): boolean };
+  }) {
     log("Adding subscription:", subscription);
     this.subscriptions.push(subscription);
   }
