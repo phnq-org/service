@@ -4,6 +4,7 @@ import http from "node:http";
 import https from "node:https";
 import { createLogger } from "@phnq/log";
 import { Anomaly, type MessageConnection, WebSocketMessageServer } from "@phnq/message";
+import chalk from "chalk";
 import Context, {
   dispatchContextEvent,
   type RequestContext,
@@ -57,7 +58,7 @@ class ApiService extends Service<NotifyApi> {
       ...config,
       handlers: {
         notify: async (m) => {
-          const connections = this.subscriptions
+          const connectionsToNotify = this.subscriptions
             .filter(
               ({ topic, options }) =>
                 topic === m.recipient.topic && options?.filter?.(m.payload) !== false,
@@ -65,9 +66,16 @@ class ApiService extends Service<NotifyApi> {
             .map((sub) => this.wsServer.getConnection(sub.connectionId))
             .filter((conn) => !!conn);
 
-          for (const conn of connections) {
+          for (const conn of connectionsToNotify) {
+            const domain = m.domain || API_SERVICE_DOMAIN;
+
+            log(
+              `${chalk.grey(`[${conn.id}]`)} Notification:\n->`,
+              chalk.grey(JSON.stringify(m, null, 2)),
+            );
+
             conn.send({
-              domain: m.domain || API_SERVICE_DOMAIN,
+              domain,
               method: "notify",
               payload: m.payload,
             });
@@ -183,8 +191,13 @@ class ApiService extends Service<NotifyApi> {
     topic: string;
     options?: { filter?(payload: unknown): boolean };
   }) {
-    log("Adding subscription:", subscription);
-    this.subscriptions.push(subscription);
+    const isSubscribed = this.subscriptions.some(
+      (s) => s.connectionId === subscription.connectionId && s.topic === subscription.topic,
+    );
+    if (!isSubscribed) {
+      log("Adding subscription:", subscription);
+      this.subscriptions.push(subscription);
+    }
   }
 
   private removeSubscription(subscription: { connectionId: string; topic: string }) {
