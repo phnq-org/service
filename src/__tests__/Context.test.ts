@@ -59,7 +59,7 @@ describe("Context", () => {
     });
   });
 
-  test.only("Context extension initializer", async () => {
+  test("Context extension initializer", async () => {
     const TestContext = createContextFactory<{ user: string }>().extend((ctx) => ({
       get user() {
         return ctx.get("user");
