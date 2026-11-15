@@ -66,23 +66,29 @@ describe("Context", () => {
       },
     }));
 
+    // Listeners are global and can't be removed, so they also fire for contexts created by
+    // other tests in the same process. Only react to the context created by this test.
+    const IDENTITY = "context-extension-initializer";
+
     TestContext.on("enter", async ({ context }) => {
+      if (context.identity !== IDENTITY) return;
       await sleep(100);
       context.setRequest("user", `user:${context.identity}`);
     });
 
     TestContext.on("exit", async ({ context, exitedContext }) => {
+      if (exitedContext.identity !== IDENTITY) return;
       expect(context).toBe(exitedContext);
       expect(context.id).toBe(exitedContext.id);
       expect(context.state).toBe("exited");
-      expect(context.identity).toBe("123");
+      expect(context.identity).toBe(IDENTITY);
       expect(Context.current.id).not.toBe(exitedContext.id);
       expect(Context.current.state).toBe("detached");
     });
 
-    const result = await Context.apply({}, { identity: "123" }, async () => {
+    const result = await Context.apply({}, { identity: IDENTITY }, async () => {
       expect(TestContext.current.state).toBe("current");
-      expect(TestContext.current.user).toBe("user:123");
+      expect(TestContext.current.user).toBe(`user:${IDENTITY}`);
       return true;
     });
 
