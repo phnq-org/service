@@ -408,7 +408,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
   }: ServiceRequestMessage): Promise<
     ServiceResponseMessage | AsyncIterableIterator<ServiceResponseMessage>
   > {
-    const start = process.hrtime.bigint();
+    const start = performance.now();
 
     const stats = this.serviceStats;
 
@@ -431,7 +431,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
             await Context.enter(context.requestContext, context.sessionContext);
             try {
               stats.record(domain, method, {
-                time: Number(process.hrtime.bigint() - start) / 1_000_000,
+                time: performance.now() - start,
               });
 
               let numResponses = 0;
@@ -440,11 +440,11 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
                 yield {
                   origin,
                   payload,
-                  stats: { time: Number(process.hrtime.bigint() - start) / 1_000_000 },
+                  stats: { time: performance.now() - start },
                   sessionContext: Context.current.sessionContext as SessionContext,
                 };
               }
-              const time = Number(process.hrtime.bigint() - start) / 1_000_000;
+              const time = performance.now() - start;
               stats.record(domain, method, {
                 time,
                 numResponses,
@@ -460,10 +460,15 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
               }
             } finally {
               Context.exit();
+              await dispatchContextEvent("service:conversation", {
+                domain,
+                method,
+                duration: performance.now() - start,
+              });
             }
           })();
         } else {
-          const time = Number(process.hrtime.bigint() - start) / 1_000_000;
+          const time = performance.now() - start;
           stats.record(domain, method, { time });
 
           if (filterMode !== "none") {
@@ -476,6 +481,12 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
             );
           }
 
+          await dispatchContextEvent("service:conversation", {
+            domain,
+            method,
+            duration: time,
+          });
+
           return {
             origin,
             payload: response,
@@ -485,7 +496,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
         }
       } catch (err) {
         stats.record(domain, method, {
-          time: Number(process.hrtime.bigint() - start) / 1_000_000,
+          time: performance.now() - start,
           error: true,
         });
 
