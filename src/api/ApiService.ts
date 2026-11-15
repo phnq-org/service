@@ -288,6 +288,8 @@ class ApiService extends Service<NotifyApi> {
 
     return Context.apply(requestContext, sessionContext, async () => {
       try {
+        const start = performance.now();
+
         await dispatchContextEvent("api:request", { domain, method, payload });
 
         const response = await serviceClient[method]?.(payload);
@@ -304,12 +306,21 @@ class ApiService extends Service<NotifyApi> {
               conn.setAttribute(k as keyof SessionContext, v);
             }
             Context.exit();
+            await dispatchContextEvent("api:conversation", {
+              domain,
+              method,
+              duration: performance.now() - start,
+            });
           })();
         } else {
           for (const [k, v] of Object.entries(Context.current.sessionContext)) {
             conn.setAttribute(k as keyof SessionContext, v);
           }
-
+          await dispatchContextEvent("api:conversation", {
+            domain,
+            method,
+            duration: performance.now() - start,
+          });
           return { payload: transformResponsePayload(response, requestMessage), stats: 0 };
         }
       } catch (err) {

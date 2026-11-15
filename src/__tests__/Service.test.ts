@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { matchCategory } from "@phnq/log";
 import { Anomaly } from "@phnq/message";
 import { createContextFactory, type RequestContext, type SessionContext } from "@/Context";
@@ -108,7 +108,23 @@ const fruitService = new Service<FruitApi>("fruit", {
 
 const fruitClient = ServiceClient.create<FruitApi>("fruit");
 
+const serviceConversations: { domain: string; method: string; duration: number }[] = [];
+TestContext.on("service:conversation", async ({ domain, method, duration }) => {
+  serviceConversations.push({ domain, method, duration });
+});
+
+const waitFor = async (cond: () => boolean, timeoutMs = 2000) => {
+  const start = Date.now();
+  while (!cond() && Date.now() - start < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+};
+
 describe("Service", () => {
+  beforeEach(() => {
+    serviceConversations.length = 0;
+  });
+
   beforeAll(async () => {
     await fruitService.connect();
     await vegService.connect();
@@ -254,6 +270,31 @@ describe("Service", () => {
   } else {
     console.info("Skipping peer stats test because NATS_MONITOR_URI is not set.");
   }
-});
 
-// const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+  it("dispatches service:conversation with a duration for a regular handler", async () => {
+    await fruitClient.getKinds();
+    await waitFor(() => serviceConversations.some((c) => c.method === "getKinds"));
+
+    const events = serviceConversations.filter(
+      (c) => c.domain === "fruit" && c.method === "getKinds",
+    );
+    expect(events).toHaveLength(1);
+    expect(typeof events[0]?.duration).toBe("number");
+    expect(events[0]?.duration).toBeGreaterThanOrEqual(0);
+  });
+
+  it("dispatches service:conversation once, after all iterator responses", async () => {
+    const responses: string[] = [];
+    for await (const response of await fruitClient.getKindsIterator()) {
+      responses.push(response);
+    }
+    await waitFor(() => serviceConversations.some((c) => c.method === "getKindsIterator"));
+
+    expect(responses).toHaveLength(3);
+    const events = serviceConversations.filter(
+      (c) => c.domain === "fruit" && c.method === "getKindsIterator",
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.duration).toBeGreaterThanOrEqual(0);
+  });
+});

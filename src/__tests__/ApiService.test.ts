@@ -124,6 +124,22 @@ const fruitService = new Service<FruitApi>("fruitWs", {
   handlers: { getKinds, getKindsIterator, doErrors, getVeggies, _noAccess, getApiVersion },
 });
 
+const apiConversations: { domain: string; method: string; duration: number }[] = [];
+const serviceConversations: { domain: string; method: string; duration: number }[] = [];
+TestContext.on("api:conversation", async ({ domain, method, duration }) => {
+  apiConversations.push({ domain, method, duration });
+});
+TestContext.on("service:conversation", async ({ domain, method, duration }) => {
+  serviceConversations.push({ domain, method, duration });
+});
+
+const waitFor = async (cond: () => boolean, timeoutMs = 2000) => {
+  const start = Date.now();
+  while (!cond() && Date.now() - start < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+};
+
 const notificationsFruit: FruitNotification[] = [];
 const notificationsVeg: FruitNotification[] = [];
 
@@ -149,6 +165,8 @@ describe("ApiService", () => {
   beforeEach(() => {
     notificationsFruit.length = 0;
     notificationsVeg.length = 0;
+    apiConversations.length = 0;
+    serviceConversations.length = 0;
   });
 
   it("throws if client url port is wrong", async () => {
@@ -235,5 +253,35 @@ describe("ApiService", () => {
   it("Correctly identifies the connection path", async () => {
     expect(await fruitWsClient.getApiVersion()).toBe("v1");
     expect(await fruitWsClientV2.getApiVersion()).toBe("v2");
+  });
+
+  it("dispatches api:conversation and service:conversation with durations", async () => {
+    await fruitWsClient.getKinds();
+    await waitFor(() => apiConversations.length > 0 && serviceConversations.length > 0);
+
+    const apiEvents = apiConversations.filter((c) => c.method === "getKinds");
+    expect(apiEvents).toHaveLength(1);
+    expect(apiEvents[0]?.domain).toBe("fruitWs");
+    expect(apiEvents[0]?.duration).toBeGreaterThanOrEqual(0);
+
+    const serviceEvents = serviceConversations.filter((c) => c.method === "getKinds");
+    expect(serviceEvents).toHaveLength(1);
+    expect(serviceEvents[0]?.domain).toBe("fruitWs");
+
+    // The API conversation wraps the service conversation.
+    expect(apiEvents[0]?.duration).toBeGreaterThanOrEqual(serviceEvents[0]?.duration ?? 0);
+  });
+
+  it("dispatches api:conversation after all iterator responses", async () => {
+    const responses: string[] = [];
+    for await (const response of await fruitWsClient.getKindsIterator()) {
+      responses.push(response);
+    }
+    await waitFor(() => apiConversations.some((c) => c.method === "getKindsIterator"));
+
+    expect(responses).toStrictEqual(["apple", "orange", "pear"]);
+    const events = apiConversations.filter((c) => c.method === "getKindsIterator");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.duration).toBeGreaterThanOrEqual(0);
   });
 });
