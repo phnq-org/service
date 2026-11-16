@@ -23,7 +23,7 @@
     "dist": "bun build --production ./src/index.ts --outdir=./dist --target=node --packages=external; tsc --project tsconfig.types.json",
     "postdist": "bun build --production ./src/browser.ts --outdir=./dist --target=browser --minify",
     "clean": "rimraf dist *.tsbuildinfo",
-    "prelint": "tsc -b",
+    "prelint": "bun check -b",
     "lint": "biome check src",
     "release": "bun run clean && bun run dist && bun test && bun publish",
     "test:nats": "PHNQ_SERVICE_NATS=nats://localhost:${NATS_PORT:=4224} PHNQ_SERVICE_NATS_MONITOR=http://localhost:${NATS_MONITOR_PORT:=8224} PHNQ_SERVICE_SIGN_SALT=abcd1234 bun test",
