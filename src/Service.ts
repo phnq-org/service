@@ -416,6 +416,9 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
 
     const handler = this.handlers[method];
     if (handler && isHandlerAvailable) {
+      const id = uuid();
+
+      await dispatchContextEvent("service:conversation:start", { id, domain, method });
       await dispatchContextEvent("service:request", { domain, method, payload });
 
       const filterMode = this.timeLogFilter(method);
@@ -460,11 +463,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
               }
             } finally {
               Context.exit();
-              await dispatchContextEvent("service:conversation", {
-                domain,
-                method,
-                duration: performance.now() - start,
-              });
+              await dispatchContextEvent("service:conversation:end", { id, domain, method });
             }
           })();
         } else {
@@ -481,11 +480,7 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
             );
           }
 
-          await dispatchContextEvent("service:conversation", {
-            domain,
-            method,
-            duration: time,
-          });
+          await dispatchContextEvent("service:conversation:end", { id, domain, method });
 
           return {
             origin,
@@ -499,6 +494,8 @@ class Service<T extends ServiceApi<D>, D extends string = T["domain"]> {
           time: performance.now() - start,
           error: true,
         });
+
+        await dispatchContextEvent("service:conversation:end", { id, domain, method });
 
         if (err instanceof ServiceError && err.type !== "server-error") {
           throw new Anomaly(err.message, err.payload);

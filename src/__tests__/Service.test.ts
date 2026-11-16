@@ -5,6 +5,7 @@ import { createContextFactory, type RequestContext, type SessionContext } from "
 import { type Serializable, Service, ServiceClient } from "..";
 import { NATS_MONITOR_URI } from "../config";
 import type { Handler } from "../Service";
+import ServiceError from "../ServiceError";
 
 if (process.env.PHNQ_MESSAGE_LOG_NATS === "1") {
   matchCategory(/.+/);
@@ -47,12 +48,14 @@ interface FruitApi {
   handlers: {
     getKinds(): Promise<string[]>;
     getKindsIterator(): Promise<AsyncIterableIterator<"apple" | "orange" | "pear">>;
-    doErrors(type: "error" | "anomaly" | "none"): Promise<void>;
+    doErrors(type: "error" | "anomaly" | "service-error" | "none"): Promise<void>;
     getFromContext(key: string): Promise<Serializable | undefined>;
     getVeggies(): Promise<string[]>;
     getUnavailable(): Promise<"unavailable">;
   };
 }
+
+let endedBeforeLastResponse: boolean | undefined;
 
 const getKinds: Handler<FruitApi, "getKinds"> = async () => ["apple", "orange", "pear"];
 
@@ -63,6 +66,10 @@ const getKindsIterator: Handler<FruitApi, "getKindsIterator"> = async () =>
     TestContext.current.setSession("currentFruit", "orange");
     yield "orange";
     TestContext.current.setSession("currentFruit", "pear");
+    // Snapshot whether the conversation has (wrongly) ended before the last response.
+    endedBeforeLastResponse = serviceConversations.some(
+      (c) => c.type === "end" && c.method === "getKindsIterator",
+    );
     yield "pear";
   })();
 
@@ -73,6 +80,9 @@ const doErrors: Handler<FruitApi, "doErrors"> = async (type) => {
 
     case "error":
       throw new Error("the error");
+
+    case "service-error":
+      throw new ServiceError({ type: "bad-request", message: "the service error" });
   }
 };
 
@@ -108,9 +118,19 @@ const fruitService = new Service<FruitApi>("fruit", {
 
 const fruitClient = ServiceClient.create<FruitApi>("fruit");
 
-const serviceConversations: { domain: string; method: string; duration: number }[] = [];
-TestContext.on("service:conversation", async ({ domain, method, duration }) => {
-  serviceConversations.push({ domain, method, duration });
+interface ConversationEvent {
+  type: "start" | "end";
+  id: string;
+  domain: string;
+  method: string;
+}
+
+const serviceConversations: ConversationEvent[] = [];
+TestContext.on("service:conversation:start", async ({ id, domain, method }) => {
+  serviceConversations.push({ type: "start", id, domain, method });
+});
+TestContext.on("service:conversation:end", async ({ id, domain, method }) => {
+  serviceConversations.push({ type: "end", id, domain, method });
 });
 
 const waitFor = async (cond: () => boolean, timeoutMs = 2000) => {
@@ -271,30 +291,65 @@ describe("Service", () => {
     console.info("Skipping peer stats test because NATS_MONITOR_URI is not set.");
   }
 
-  it("dispatches service:conversation with a duration for a regular handler", async () => {
+  const hasEnded = (method: string) =>
+    serviceConversations.some((c) => c.type === "end" && c.method === method);
+
+  it("dispatches service:conversation start and end for a regular handler", async () => {
     await fruitClient.getKinds();
-    await waitFor(() => serviceConversations.some((c) => c.method === "getKinds"));
+    await waitFor(() => hasEnded("getKinds"));
 
     const events = serviceConversations.filter(
       (c) => c.domain === "fruit" && c.method === "getKinds",
     );
-    expect(events).toHaveLength(1);
-    expect(typeof events[0]?.duration).toBe("number");
-    expect(events[0]?.duration).toBeGreaterThanOrEqual(0);
+    expect(events.map((e) => e.type)).toStrictEqual(["start", "end"]);
+    expect(events[0]?.id).toBeTruthy();
+    expect(events[1]?.id).toBe(events[0]?.id as string);
   });
 
-  it("dispatches service:conversation once, after all iterator responses", async () => {
+  it("dispatches service:conversation end only after the last iterator response", async () => {
     const responses: string[] = [];
     for await (const response of await fruitClient.getKindsIterator()) {
       responses.push(response);
     }
-    await waitFor(() => serviceConversations.some((c) => c.method === "getKindsIterator"));
+    await waitFor(() => hasEnded("getKindsIterator"));
 
     expect(responses).toHaveLength(3);
     const events = serviceConversations.filter(
       (c) => c.domain === "fruit" && c.method === "getKindsIterator",
     );
-    expect(events).toHaveLength(1);
-    expect(events[0]?.duration).toBeGreaterThanOrEqual(0);
+    expect(events.map((e) => e.type)).toStrictEqual(["start", "end"]);
+    expect(events[1]?.id).toBe(events[0]?.id as string);
+    expect(endedBeforeLastResponse).toBe(false);
+  });
+
+  it("dispatches service:conversation end when the handler throws", async () => {
+    await fruitClient.doErrors("error").catch(() => undefined);
+    await waitFor(() => hasEnded("doErrors"));
+
+    const events = serviceConversations.filter((c) => c.method === "doErrors");
+    expect(events.map((e) => e.type)).toStrictEqual(["start", "end"]);
+  });
+
+  it("dispatches service:conversation end when the handler throws a ServiceError", async () => {
+    // ServiceErrors that aren't "server-error" are converted to Anomalies by the service.
+    await fruitClient.doErrors("service-error").catch((err) => {
+      expect(err).toBeInstanceOf(Anomaly);
+    });
+    await waitFor(() => hasEnded("doErrors"));
+
+    const events = serviceConversations.filter((c) => c.method === "doErrors");
+    expect(events.map((e) => e.type)).toStrictEqual(["start", "end"]);
+  });
+
+  it("uses a distinct conversation id for each request", async () => {
+    await fruitClient.getKinds();
+    await fruitClient.getKinds();
+    await waitFor(() => serviceConversations.filter((c) => c.type === "end").length >= 2);
+
+    const starts = serviceConversations.filter(
+      (c) => c.type === "start" && c.method === "getKinds",
+    );
+    expect(starts).toHaveLength(2);
+    expect(starts[0]?.id).not.toBe(starts[1]?.id as string);
   });
 });
