@@ -35,14 +35,7 @@ interface ContextEvents<R extends RequestContext, S extends SessionContext> {
   enter: { context: Context<R, S> };
   exit: { context: Context<R, S>; exitedContext: Context<R, S> };
   "api:request": { domain: string; method: string; payload: unknown; context: Context<R, S> };
-  "api:conversation": { domain: string; method: string; duration: number; context: Context<R, S> };
   "service:request": { domain: string; method: string; payload: unknown; context: Context<R, S> };
-  "service:conversation": {
-    domain: string;
-    method: string;
-    duration: number;
-    context: Context<R, S>;
-  };
   "api:error": {
     error: unknown;
     domain: string;
@@ -55,6 +48,20 @@ interface ContextEvents<R extends RequestContext, S extends SessionContext> {
     domain: string;
     method: string;
     payload: unknown;
+    context: Context<R, S>;
+  };
+  "api:conversation:start": { id: string; domain: string; method: string; context: Context<R, S> };
+  "api:conversation:end": { id: string; domain: string; method: string; context: Context<R, S> };
+  "service:conversation:start": {
+    id: string;
+    domain: string;
+    method: string;
+    context: Context<R, S>;
+  };
+  "service:conversation:end": {
+    id: string;
+    domain: string;
+    method: string;
     context: Context<R, S>;
   };
 }

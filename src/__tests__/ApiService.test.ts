@@ -76,6 +76,7 @@ interface FruitApi {
   handlers: {
     getKinds(): Promise<string[]>;
     getKindsIterator(): Promise<AsyncIterableIterator<string>>;
+    getFailingIterator(): Promise<AsyncIterableIterator<string>>;
     doErrors(type: "error" | "anomaly" | "none"): Promise<void>;
     // getFromContext(key: string): Promise<Serializable | undefined>;
     getVeggies(): Promise<string[]>;
@@ -90,7 +91,15 @@ const getKindsIterator: Handler<FruitApi, "getKindsIterator"> = async () =>
   (async function* () {
     yield "apple";
     yield "orange";
+    // Snapshot whether any conversation has (wrongly) ended before the last response.
+    endedBeforeLastResponse = allEvents.some((e) => e.includes(":end:getKindsIterator"));
     yield "pear";
+  })();
+
+const getFailingIterator: Handler<FruitApi, "getFailingIterator"> = async () =>
+  (async function* () {
+    yield "apple";
+    throw new Error("iterator failed");
   })();
 
 const doErrors: Handler<FruitApi, "doErrors"> = async (type) => {
@@ -121,16 +130,44 @@ const getApiVersion: Handler<FruitApi, "getApiVersion"> = async () => {
 };
 
 const fruitService = new Service<FruitApi>("fruitWs", {
-  handlers: { getKinds, getKindsIterator, doErrors, getVeggies, _noAccess, getApiVersion },
+  handlers: {
+    getKinds,
+    getKindsIterator,
+    getFailingIterator,
+    doErrors,
+    getVeggies,
+    _noAccess,
+    getApiVersion,
+  },
 });
 
-const apiConversations: { domain: string; method: string; duration: number }[] = [];
-const serviceConversations: { domain: string; method: string; duration: number }[] = [];
-TestContext.on("api:conversation", async ({ domain, method, duration }) => {
-  apiConversations.push({ domain, method, duration });
+let endedBeforeLastResponse: boolean | undefined;
+
+interface ConversationEvent {
+  type: "start" | "end";
+  id: string;
+  domain: string;
+  method: string;
+}
+
+const apiConversations: ConversationEvent[] = [];
+const serviceConversations: ConversationEvent[] = [];
+const allEvents: string[] = [];
+TestContext.on("api:conversation:start", async ({ id, domain, method }) => {
+  apiConversations.push({ type: "start", id, domain, method });
+  allEvents.push(`api:start:${method}`);
 });
-TestContext.on("service:conversation", async ({ domain, method, duration }) => {
-  serviceConversations.push({ domain, method, duration });
+TestContext.on("api:conversation:end", async ({ id, domain, method }) => {
+  apiConversations.push({ type: "end", id, domain, method });
+  allEvents.push(`api:end:${method}`);
+});
+TestContext.on("service:conversation:start", async ({ id, domain, method }) => {
+  serviceConversations.push({ type: "start", id, domain, method });
+  allEvents.push(`service:start:${method}`);
+});
+TestContext.on("service:conversation:end", async ({ id, domain, method }) => {
+  serviceConversations.push({ type: "end", id, domain, method });
+  allEvents.push(`service:end:${method}`);
 });
 
 const waitFor = async (cond: () => boolean, timeoutMs = 2000) => {
@@ -167,6 +204,7 @@ describe("ApiService", () => {
     notificationsVeg.length = 0;
     apiConversations.length = 0;
     serviceConversations.length = 0;
+    allEvents.length = 0;
   });
 
   it("throws if client url port is wrong", async () => {
@@ -255,33 +293,87 @@ describe("ApiService", () => {
     expect(await fruitWsClientV2.getApiVersion()).toBe("v2");
   });
 
-  it("dispatches api:conversation and service:conversation with durations", async () => {
+  const hasEnded = (events: ConversationEvent[], method: string) =>
+    events.some((c) => c.type === "end" && c.method === method);
+
+  it("dispatches api and service conversation start/end events", async () => {
     await fruitWsClient.getKinds();
-    await waitFor(() => apiConversations.length > 0 && serviceConversations.length > 0);
+    await waitFor(
+      () => hasEnded(apiConversations, "getKinds") && hasEnded(serviceConversations, "getKinds"),
+    );
 
     const apiEvents = apiConversations.filter((c) => c.method === "getKinds");
-    expect(apiEvents).toHaveLength(1);
+    expect(apiEvents.map((e) => e.type)).toStrictEqual(["start", "end"]);
     expect(apiEvents[0]?.domain).toBe("fruitWs");
-    expect(apiEvents[0]?.duration).toBeGreaterThanOrEqual(0);
+    expect(apiEvents[1]?.id).toBe(apiEvents[0]?.id as string);
 
     const serviceEvents = serviceConversations.filter((c) => c.method === "getKinds");
-    expect(serviceEvents).toHaveLength(1);
+    expect(serviceEvents.map((e) => e.type)).toStrictEqual(["start", "end"]);
     expect(serviceEvents[0]?.domain).toBe("fruitWs");
+    expect(serviceEvents[1]?.id).toBe(serviceEvents[0]?.id as string);
+
+    // Separate conversations, so separate ids.
+    expect(apiEvents[0]?.id).not.toBe(serviceEvents[0]?.id as string);
 
     // The API conversation wraps the service conversation.
-    expect(apiEvents[0]?.duration).toBeGreaterThanOrEqual(serviceEvents[0]?.duration ?? 0);
+    expect(allEvents.filter((e) => e.endsWith(":getKinds"))).toStrictEqual([
+      "api:start:getKinds",
+      "service:start:getKinds",
+      "service:end:getKinds",
+      "api:end:getKinds",
+    ]);
   });
 
-  it("dispatches api:conversation after all iterator responses", async () => {
+  it("dispatches conversation end only after the last iterator response", async () => {
     const responses: string[] = [];
     for await (const response of await fruitWsClient.getKindsIterator()) {
       responses.push(response);
     }
-    await waitFor(() => apiConversations.some((c) => c.method === "getKindsIterator"));
+    await waitFor(
+      () =>
+        hasEnded(apiConversations, "getKindsIterator") &&
+        hasEnded(serviceConversations, "getKindsIterator"),
+    );
 
     expect(responses).toStrictEqual(["apple", "orange", "pear"]);
-    const events = apiConversations.filter((c) => c.method === "getKindsIterator");
-    expect(events).toHaveLength(1);
-    expect(events[0]?.duration).toBeGreaterThanOrEqual(0);
+    for (const conversations of [apiConversations, serviceConversations]) {
+      const events = conversations.filter((c) => c.method === "getKindsIterator");
+      expect(events.map((e) => e.type)).toStrictEqual(["start", "end"]);
+      expect(events[1]?.id).toBe(events[0]?.id as string);
+    }
+    expect(endedBeforeLastResponse).toBe(false);
+  });
+
+  it("dispatches conversation end even when the handler errors", async () => {
+    await fruitWsClient.doErrors("error").catch(() => undefined);
+    await waitFor(
+      () => hasEnded(apiConversations, "doErrors") && hasEnded(serviceConversations, "doErrors"),
+    );
+
+    for (const conversations of [apiConversations, serviceConversations]) {
+      const events = conversations.filter((c) => c.method === "doErrors");
+      expect(events.map((e) => e.type)).toStrictEqual(["start", "end"]);
+    }
+  });
+
+  it("dispatches conversation end when an iterator fails mid-stream", async () => {
+    const responses: string[] = [];
+    try {
+      for await (const response of await fruitWsClient.getFailingIterator()) {
+        responses.push(response);
+      }
+    } catch {
+      // expected
+    }
+    await waitFor(
+      () =>
+        hasEnded(apiConversations, "getFailingIterator") &&
+        hasEnded(serviceConversations, "getFailingIterator"),
+    );
+
+    for (const conversations of [apiConversations, serviceConversations]) {
+      const events = conversations.filter((c) => c.method === "getFailingIterator");
+      expect(events.map((e) => e.type)).toStrictEqual(["start", "end"]);
+    }
   });
 });

@@ -5,6 +5,7 @@ import https from "node:https";
 import { createLogger } from "@phnq/log";
 import { Anomaly, type MessageConnection, WebSocketMessageServer } from "@phnq/message";
 import chalk from "chalk";
+import { v4 as uuid } from "uuid";
 import Context, {
   dispatchContextEvent,
   type RequestContext,
@@ -287,9 +288,9 @@ class ApiService extends Service<NotifyApi> {
     const payload = transformRequestPayload(payloadRaw, requestMessage);
 
     return Context.apply(requestContext, sessionContext, async () => {
+      const id = uuid();
       try {
-        const start = performance.now();
-
+        await dispatchContextEvent("api:conversation:start", { id, domain, method });
         await dispatchContextEvent("api:request", { domain, method, payload });
 
         const response = await serviceClient[method]?.(payload);
@@ -299,32 +300,28 @@ class ApiService extends Service<NotifyApi> {
         ) {
           return (async function* (): AsyncIterableIterator<ApiResponseMessage> {
             await Context.enter(requestContext, sessionContext);
-            for await (const payload of response as AsyncIterableIterator<unknown>) {
-              yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
+            try {
+              for await (const payload of response as AsyncIterableIterator<unknown>) {
+                yield { payload: transformResponsePayload(payload, requestMessage), stats: 0 };
+              }
+              for (const [k, v] of Object.entries(Context.current.sessionContext)) {
+                conn.setAttribute(k as keyof SessionContext, v);
+              }
+            } finally {
+              Context.exit();
+              await dispatchContextEvent("api:conversation:end", { id, domain, method });
             }
-            for (const [k, v] of Object.entries(Context.current.sessionContext)) {
-              conn.setAttribute(k as keyof SessionContext, v);
-            }
-            Context.exit();
-            await dispatchContextEvent("api:conversation", {
-              domain,
-              method,
-              duration: performance.now() - start,
-            });
           })();
         } else {
           for (const [k, v] of Object.entries(Context.current.sessionContext)) {
             conn.setAttribute(k as keyof SessionContext, v);
           }
-          await dispatchContextEvent("api:conversation", {
-            domain,
-            method,
-            duration: performance.now() - start,
-          });
+          await dispatchContextEvent("api:conversation:end", { id, domain, method });
           return { payload: transformResponsePayload(response, requestMessage), stats: 0 };
         }
       } catch (err) {
         await dispatchContextEvent("api:error", { error: err, domain, method, payload });
+        await dispatchContextEvent("api:conversation:end", { id, domain, method });
         throw err;
       }
     });
